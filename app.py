@@ -1159,7 +1159,7 @@ def _cohort_sort_key(student):
     cohort = parts[1] if len(parts) > 1 else ""
     year_match = re.search(r"\d{4}", cohort)
     year = int(year_match.group()) if year_match else 0
-    season_order = {"spring": 1, "summer ii": 3, "summer": 2, "fall": 4, "winter": 5}
+    season_order = {"spring": 1, "summer ii": 3, "summer": 2, "fall": 4, "winter ii": 6, "winter": 5}
     cohort_lower = cohort.lower()
     season = next((v for k, v in season_order.items() if k in cohort_lower), 0)
     return (year, season)
