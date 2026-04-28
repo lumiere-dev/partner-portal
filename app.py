@@ -843,7 +843,7 @@ def show_applicant_onboarding(student):
         '<div class="info-card">'
         '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.25rem;">'
         + fb("Date Interview Conducted", format_date(student.get("interview_invitation_date")))
-        + fb("Date of Mentor Outreach", format_date(student.get("mentor_outreach_date")))
+        + fb("Date we reached out to mentor regarding this student", format_date(student.get("mentor_outreach_date")))
         + '</div></div>',
         unsafe_allow_html=True
     )
