@@ -85,14 +85,16 @@ def get_partner_info(email):
                 if isinstance(first, dict):
                     headshot_url = first.get("url", "")
             poc_name = ""
+            poc_email = ""
             linked_ids = f.get("BD POC (Linked)", [])
             if linked_ids:
                 poc_record = get_bd_poc_table().get(linked_ids[0])
                 poc_name = poc_record["fields"].get("Name", "")
-            return {"bd_poc_name": poc_name, "bd_poc_headshot_url": headshot_url}
+                poc_email = poc_record["fields"].get("BD POC Email", "")
+            return {"bd_poc_name": poc_name, "bd_poc_email": poc_email, "bd_poc_headshot_url": headshot_url}
     except Exception:
         pass
-    return {"bd_poc_name": "", "bd_poc_headshot_url": ""}
+    return {"bd_poc_name": "", "bd_poc_email": "", "bd_poc_headshot_url": ""}
 
 
 @st.cache_resource(show_spinner=False)
@@ -1260,6 +1262,7 @@ def show_dashboard():
 
     info = get_partner_info(st.session_state.partner_email)
     poc_name = info.get("bd_poc_name", "")
+    poc_email = info.get("bd_poc_email", "")
     poc_headshot = info.get("bd_poc_headshot_url", "")
 
 
@@ -1267,6 +1270,10 @@ def show_dashboard():
         headline = (
             f"I'm {poc_name}, your Partnerships Manager at Lumiere Education."
             if poc_name else "Your Partnerships Manager at Lumiere Education."
+        )
+        email_html = (
+            f'<a href="mailto:{poc_email}" style="font-size:0.82rem;color:#BE1E2D;text-decoration:none;">{poc_email}</a>'
+            if poc_email else ""
         )
         headshot_html = (
             f'<img src="{poc_headshot}" style="width:80px;height:80px;border-radius:50%;'
@@ -1286,8 +1293,9 @@ def show_dashboard():
             f'letter-spacing:0.08em;margin-bottom:0.35rem;">Your Partnerships Manager</div>'
             f'<div style="font-size:0.98rem;font-weight:700;color:#1A1A2E;line-height:1.35;margin-bottom:0.3rem;">'
             f'{headline}</div>'
-            f'<div style="font-size:0.82rem;color:#64748B;line-height:1.45;">'
+            f'<div style="font-size:0.82rem;color:#64748B;line-height:1.45;margin-bottom:0.3rem;">'
             f'I\'m here to support your partnership with Lumiere. Reach out anytime with questions about your students or our programs.</div>'
+            f'{email_html}'
             f'</div>'
             f'</div>',
             unsafe_allow_html=True
