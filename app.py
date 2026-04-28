@@ -469,7 +469,8 @@ def get_onboarding_students(partner_email):
         formula = (
             f"AND("
             f"FIND('{safe}', LOWER(ARRAYJOIN({{Stacker ID (Partner)}}, ','))), "
-            f"{{Student Confirmed & Launched}} = ''"
+            f"{{Student Confirmed & Launched}} = '', "
+            f"{{Upcoming Cohort (Cohort Table)}} = TRUE()"
             f")"
         )
         records = tables["students"].all(formula=formula)
@@ -821,7 +822,10 @@ def show_applicant_onboarding(student):
         unsafe_allow_html=True
     )
 
-    # Proposed mentor
+    is_launched = str(student.get("confirmed_launched") or "").strip().lower() == "yes"
+    mentor_prefix = "Mentor's" if is_launched else "Proposed mentor's"
+
+    # Mentor CV
     cv_raw = student.get("mentor_cv")
     if isinstance(cv_raw, list) and cv_raw:
         cv_html = " ".join(
@@ -835,9 +839,9 @@ def show_applicant_onboarding(student):
     st.markdown(
         '<div class="info-card">'
         '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.25rem;">'
-        + fb("Proposed mentor's name", student.get("mentor_name") or "Not yet assigned")
-        + fb("Proposed mentor's university", student.get("mentor_university"))
-        + fb("Proposed mentor's CV", cv_html)
+        + fb(f"{mentor_prefix} name", student.get("mentor_name") or "Not yet assigned")
+        + fb(f"{mentor_prefix} university", student.get("mentor_university"))
+        + fb(f"{mentor_prefix} CV", cv_html)
         + '</div></div>',
         unsafe_allow_html=True
     )
