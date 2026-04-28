@@ -860,7 +860,6 @@ def show_applicant_onboarding(student):
             f'<a href="mailto:{pm_email}" style="color:#BE1E2D;text-decoration:none;">{pm_email}</a>'
             if pm_email else "—"
         )
-        st.markdown("#### Program Manager")
         st.markdown(
             '<div class="info-card">'
             '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.25rem;">'
