@@ -1268,33 +1268,34 @@ def show_dashboard():
 
 
     def render_poc_card():
-        headline = (
-            f"I'm {poc_name}, your Partnerships Manager at Lumiere Education."
-            if poc_name else "Your Partnerships Manager at Lumiere Education."
-        )
         email_html = (
-            f'<a href="mailto:{poc_email}" style="font-size:0.82rem;color:#BE1E2D;text-decoration:none;">{poc_email}</a>'
+            f'<a href="mailto:{poc_email}" style="font-size:0.83rem;color:#BE1E2D;'
+            f'font-weight:600;text-decoration:none;">{poc_email}</a>'
             if poc_email else ""
         )
         headshot_html = (
-            f'<img src="{poc_headshot}" style="width:80px;height:80px;border-radius:50%;'
-            f'object-fit:cover;border:3px solid #E2E8F0;flex-shrink:0;">'
+            f'<img src="{poc_headshot}" style="width:110px;height:110px;border-radius:50%;'
+            f'object-fit:cover;border:4px solid #F1F5F9;box-shadow:0 2px 8px rgba(0,0,0,0.12);">'
             if poc_headshot else
-            '<div style="width:80px;height:80px;border-radius:50%;background:#F1F5F9;'
-            'flex-shrink:0;display:flex;align-items:center;justify-content:center;'
-            'font-size:2rem;color:#94A3B8;">👤</div>'
+            '<div style="width:110px;height:110px;border-radius:50%;background:#F1F5F9;'
+            'display:flex;align-items:center;justify-content:center;'
+            'font-size:2.5rem;color:#94A3B8;">👤</div>'
         )
         st.markdown(
-            f'<div style="background:white;border-radius:12px;padding:1.25rem 1.5rem;'
-            f'box-shadow:0 2px 8px rgba(0,0,0,0.08);margin-bottom:1.25rem;'
-            f'display:flex;align-items:center;gap:1.25rem;">'
-            f'{headshot_html}'
-            f'<div>'
-            f'<div style="font-size:0.68rem;font-weight:700;color:#BE1E2D;text-transform:uppercase;'
-            f'letter-spacing:0.08em;margin-bottom:0.35rem;">Your Partnerships Manager</div>'
-            f'<div style="font-size:0.98rem;font-weight:700;color:#1A1A2E;line-height:1.35;margin-bottom:0.3rem;">'
-            f'{headline}</div>'
-            f'<div style="font-size:0.82rem;color:#64748B;line-height:1.45;margin-bottom:0.3rem;">'
+            f'<div style="background:white;border-radius:14px;'
+            f'box-shadow:0 4px 20px rgba(0,0,0,0.10);margin-bottom:1.25rem;overflow:hidden;">'
+            f'<div style="background:linear-gradient(135deg,#BE1E2D 0%,#8B1520 100%);'
+            f'padding:0.6rem 1rem;text-align:center;">'
+            f'<span style="font-size:0.68rem;font-weight:700;color:rgba(255,255,255,0.9);'
+            f'text-transform:uppercase;letter-spacing:0.1em;">Your Partnerships Manager</span>'
+            f'</div>'
+            f'<div style="padding:1.5rem 1.5rem 1.25rem;text-align:center;">'
+            f'<div style="display:flex;justify-content:center;margin-bottom:1rem;">{headshot_html}</div>'
+            f'<div style="font-size:1.05rem;font-weight:700;color:#1A1A2E;margin-bottom:0.25rem;">'
+            f'{poc_name or "Partnerships Manager"}</div>'
+            f'<div style="font-size:0.8rem;color:#94A3B8;margin-bottom:0.85rem;">'
+            f'Lumiere Education</div>'
+            f'<div style="font-size:0.83rem;color:#64748B;line-height:1.55;margin-bottom:0.75rem;">'
             f'I\'m here to support your partnership with Lumiere. Reach out anytime with questions about your students or our programs.</div>'
             f'{email_html}'
             f'</div>'
@@ -1303,7 +1304,7 @@ def show_dashboard():
         )
 
     if "Onboarding" in view:
-        col_main, col_poc = st.columns([3, 1.2])
+        col_main, col_poc = st.columns([3, 1.6])
         with col_poc:
             render_poc_card()
         with col_main:
@@ -1327,7 +1328,7 @@ def show_dashboard():
             ]
             render_student_list(filtered_onboarding, "Onboarding Tracker")
     else:
-        col_main, col_poc = st.columns([3, 1.2])
+        col_main, col_poc = st.columns([3, 1.6])
         with col_poc:
             render_poc_card()
         with col_main:
