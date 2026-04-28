@@ -469,8 +469,7 @@ def get_onboarding_students(partner_email):
         formula = (
             f"AND("
             f"FIND('{safe}', LOWER(ARRAYJOIN({{Stacker ID (Partner)}}, ','))), "
-            f"{{Student Confirmed & Launched}} = '', "
-            f"SUM({{Upcoming Cohort (Cohort Table)}}) > 0"
+            f"{{Student Confirmed & Launched}} = ''"
             f")"
         )
         records = tables["students"].all(formula=formula)
