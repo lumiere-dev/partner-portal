@@ -1190,7 +1190,7 @@ def show_dashboard():
             f'<img src="data:image/png;base64,{logo_b64}" width="60"></div>',
             unsafe_allow_html=True
         )
-        st.markdown("### Partner Portal")
+        st.markdown("### Lumiere Partner Portal")
         if st.session_state.partner_name:
             st.markdown(
                 f'<p style="color:#FFFFFF;font-size:1rem;font-weight:600;margin-top:-0.4rem;margin-bottom:0.1rem;">'
@@ -1287,7 +1287,7 @@ def show_dashboard():
             f'<div style="font-size:0.98rem;font-weight:700;color:#1A1A2E;line-height:1.35;margin-bottom:0.3rem;">'
             f'{headline}</div>'
             f'<div style="font-size:0.82rem;color:#64748B;line-height:1.45;">'
-            f'Got questions about your students or our programs? Feel free to reach out anytime.</div>'
+            f'I\'m here to support your partnership with Lumiere. Reach out anytime with questions about your students or our programs.</div>'
             f'</div>'
             f'</div>',
             unsafe_allow_html=True
