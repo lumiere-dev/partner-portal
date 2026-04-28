@@ -52,6 +52,15 @@ def get_bd_poc_table():
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
+def get_staff_name(record_id):
+    try:
+        record = get_bd_poc_table().get(record_id)
+        return record["fields"].get("Name", "")
+    except Exception:
+        return ""
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_partner_name(email):
     try:
         safe = email.strip().lower().replace("'", "\\'")
@@ -203,6 +212,8 @@ STUDENT_FIELDS = {
     "hours_recorded":           "[Current + Archived] No. of Hours Recorded",
     "student_no_shows":         "[Current + Archived] No. of Student No Shows in Mentor Meetings",
     "most_recent_meeting_mentor":"Most Recent Meeting Mentor",
+    "program_manager":          "Program Manager",
+    "program_manager_email":    "Program Manager Email",
     "revised_final_paper_due":  "PM: Student's Revised Final Paper - Due date",
     "revised_final_paper_upload": "Revised Final Paper upload (from Mentor-Student Progress Up Date)",
     "submission_portal":        "Student Submission Portal Lookup",
@@ -441,6 +452,8 @@ def _build_student(record):
         "completed_meetings":        f.get(STUDENT_FIELDS["completed_meetings"], 0),
         "hours_recorded":            f.get(STUDENT_FIELDS["hours_recorded"], ""),
         "student_no_shows":          unwrap(f.get(STUDENT_FIELDS["student_no_shows"], 0), default=0),
+        "pm_ids":                    f.get(STUDENT_FIELDS["program_manager"], []) if isinstance(f.get(STUDENT_FIELDS["program_manager"], []), list) else [],
+        "pm_email":                  unwrap(f.get(STUDENT_FIELDS["program_manager_email"], "")),
         "most_recent_meeting_mentor":unwrap(f.get(STUDENT_FIELDS["most_recent_meeting_mentor"], "")),
         "revised_final_paper_due":    unwrap(f.get(STUDENT_FIELDS["revised_final_paper_due"], "")),
         "revised_final_paper_upload": f.get(STUDENT_FIELDS["revised_final_paper_upload"], []),
@@ -837,6 +850,25 @@ def show_applicant_onboarding(student):
 
     is_launched = str(student.get("confirmed_launched") or "").strip().lower() == "yes"
     mentor_prefix = "Mentor's" if is_launched else "Proposed mentor's"
+
+    # Program Manager (launched students only)
+    if is_launched:
+        pm_ids = student.get("pm_ids", [])
+        pm_name = get_staff_name(pm_ids[0]) if pm_ids else ""
+        pm_email = student.get("pm_email", "")
+        pm_email_html = (
+            f'<a href="mailto:{pm_email}" style="color:#BE1E2D;text-decoration:none;">{pm_email}</a>'
+            if pm_email else "—"
+        )
+        st.markdown("#### Program Manager")
+        st.markdown(
+            '<div class="info-card">'
+            '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.25rem;">'
+            + fb("Program Manager", pm_name or "—")
+            + fb("Program Manager Email", pm_email_html)
+            + '</div></div>',
+            unsafe_allow_html=True
+        )
 
     # Mentor CV
     cv_raw = student.get("mentor_cv")
