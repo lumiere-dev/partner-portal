@@ -46,6 +46,11 @@ def get_partner_table():
     return get_airtable_api().base(BASE_ID).table(PARTNER_TABLE_ID)
 
 
+@st.cache_resource(show_spinner=False)
+def get_bd_poc_table():
+    return get_airtable_api().base(BASE_ID).table("tbl22BErOHo0FLcgJ")
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_partner_name(email):
     try:
@@ -68,7 +73,7 @@ def get_partner_info(email):
         safe = email.strip().lower().replace("'", "\\'")
         records = get_partner_table().all(
             formula=f"LOWER({{Stacker log-in Email}}) = '{safe}'",
-            fields=["BD POC (Lumiere)", "Headshot (from BD POC (Linked))"],
+            fields=["BD POC (Linked)", "Headshot (from BD POC (Linked))"],
             max_records=1,
         )
         if records:
@@ -79,8 +84,11 @@ def get_partner_info(email):
                 first = raw_headshot[0]
                 if isinstance(first, dict):
                     headshot_url = first.get("url", "")
-            poc_raw = f.get("BD POC (Lumiere)", "")
-            poc_name = poc_raw[0] if isinstance(poc_raw, list) and poc_raw else (poc_raw or "")
+            poc_name = ""
+            linked_ids = f.get("BD POC (Linked)", [])
+            if linked_ids:
+                poc_record = get_bd_poc_table().get(linked_ids[0])
+                poc_name = poc_record["fields"].get("Name", "")
             return {"bd_poc_name": poc_name, "bd_poc_headshot_url": headshot_url}
     except Exception:
         pass
