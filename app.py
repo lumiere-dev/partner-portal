@@ -192,6 +192,7 @@ STUDENT_FIELDS = {
     "student_no_shows":         "[Current + Archived] No. of Student No Shows in Mentor Meetings",
     "most_recent_meeting_mentor":"[Current + Archived] Most Recent Meeting Mentor",
     "revised_final_paper_due":  "PM: Student's Revised Final Paper - Due date",
+    "revised_final_paper_upload": "Revised Final Paper upload (from Mentor-Student Progress Up Date)",
     "submission_portal":        "Student Submission Portal Lookup",
 }
 
@@ -204,18 +205,10 @@ DEADLINE_FIELDS = {
 }
 
 SUBMISSION_FIELDS = [
-    "Syllabus Submission (From Mentor)",
     "Research Question",
     "Research Proposal",
     "Research Outline",
-    "Milestone",
-    "Milestone Submission (from Mentor-Student Progress Table)",
-    "Milestone 1 Submission (from Mentor-Student Progress Table)",
-    "Final Paper",
     "First Draft",
-    "Revised Final Paper",
-    "Final Draft",
-    "Target Publication Submission",
 ]
 
 
@@ -437,8 +430,9 @@ def _build_student(record):
         "hours_recorded":            f.get(STUDENT_FIELDS["hours_recorded"], ""),
         "student_no_shows":          unwrap(f.get(STUDENT_FIELDS["student_no_shows"], 0), default=0),
         "most_recent_meeting_mentor":unwrap(f.get(STUDENT_FIELDS["most_recent_meeting_mentor"], "")),
-        "revised_final_paper_due":   unwrap(f.get(STUDENT_FIELDS["revised_final_paper_due"], "")),
-        "submission_portal":         unwrap(f.get(STUDENT_FIELDS["submission_portal"], "")),
+        "revised_final_paper_due":    unwrap(f.get(STUDENT_FIELDS["revised_final_paper_due"], "")),
+        "revised_final_paper_upload": f.get(STUDENT_FIELDS["revised_final_paper_upload"], []),
+        "submission_portal":          unwrap(f.get(STUDENT_FIELDS["submission_portal"], "")),
     }
 
 
@@ -491,24 +485,42 @@ def get_program_students(partner_email):
         return []
 
 
+DEADLINE_FETCH_FIELDS = [
+    "Deadline Name",
+    "Student Application & Cohort Tracker",
+    "Deadline Type",
+    "Due Date (in use, updated to reflect student's timeline)",
+    "Deadline Status",
+    "Date Submitted",
+] + SUBMISSION_FIELDS
+
+
 @st.cache_data(ttl=300, show_spinner=False)
-def get_deadlines_for_student(student_name):
+def get_deadlines_for_student(student_id, student_name):
     tables = get_tables()
     try:
         name_part = student_name.split("|")[0].strip().replace("'", "\\'")
         formula = f"FIND('{name_part}', {{Deadline Name}})"
-        records = tables["deadlines"].all(formula=formula)
+        raw = tables["deadlines"].all(formula=formula, fields=DEADLINE_FETCH_FIELDS)
+        records = [
+            r for r in raw
+            if student_id in r["fields"].get("Student Application & Cohort Tracker", [])
+        ]
         deadlines = []
         for record in records:
-            fields = record["fields"]
-            submissions = {field: fields[field] for field in SUBMISSION_FIELDS if fields.get(field)}
+            f = record["fields"]
+            submissions = {field: f[field] for field in SUBMISSION_FIELDS if f.get(field)}
+            # Date Submitted is a lookup — unwrap array if needed
+            date_submitted = f.get(DEADLINE_FIELDS["date_submitted"], "")
+            if isinstance(date_submitted, list):
+                date_submitted = date_submitted[0] if date_submitted else ""
             deadlines.append({
                 "id": record["id"],
-                "name": fields.get(DEADLINE_FIELDS["name"], ""),
-                "type": fields.get(DEADLINE_FIELDS["type"], ""),
-                "due_date": fields.get(DEADLINE_FIELDS["due_date"], ""),
-                "status": fields.get(DEADLINE_FIELDS["status"], ""),
-                "date_submitted": fields.get(DEADLINE_FIELDS["date_submitted"], ""),
+                "name": f.get(DEADLINE_FIELDS["name"], ""),
+                "type": f.get(DEADLINE_FIELDS["type"], ""),
+                "due_date": f.get(DEADLINE_FIELDS["due_date"], ""),
+                "status": f.get(DEADLINE_FIELDS["status"], ""),
+                "date_submitted": date_submitted,
                 "submissions": submissions,
             })
         deadlines.sort(key=lambda x: x["due_date"] or "9999-99-99")
@@ -871,8 +883,9 @@ def _render_submission_value(value, label=None):
 
 def show_progress_tracker(student):
     EXCLUDED_TYPES = {"Syllabus", "Evaluation & Feedback"}
-    all_deadlines = get_deadlines_for_student(student["name"])
+    all_deadlines = get_deadlines_for_student(student["id"], student["name"])
     deadlines = [d for d in all_deadlines if d.get("type") not in EXCLUDED_TYPES]
+
 
     submission_portal = student.get("submission_portal") or ""
     if submission_portal:
@@ -1004,9 +1017,19 @@ def show_progress_tracker(student):
             '</div>',
             unsafe_allow_html=True,
         )
-        for dl in submitted_deadlines:
+        rfp_upload = student.get("revised_final_paper_upload")
+        for i, dl in enumerate(submitted_deadlines):
             _render_deadline_row(dl)
-            st.markdown("---")
+            # Skip the trailing separator on the last row if the RFP upload follows
+            last = (i == len(submitted_deadlines) - 1)
+            if not (last and rfp_upload):
+                st.markdown("---")
+
+    # Revised Final Paper upload lives on the student record, not the deadlines table
+    rfp_upload = student.get("revised_final_paper_upload")
+    if rfp_upload:
+        _render_submission_value(rfp_upload, label="Submission")
+        st.markdown("---")
 
 
 def show_meeting_summary(student):
