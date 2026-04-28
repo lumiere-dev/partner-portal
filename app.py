@@ -1268,88 +1268,84 @@ def show_dashboard():
 
 
     def render_poc_card():
+        headline = (
+            f"Hi, I'm {poc_name}, your Partnerships Manager at Lumiere Education."
+            if poc_name else "Hi, I'm your Partnerships Manager at Lumiere Education."
+        )
         email_html = (
             f'<a href="mailto:{poc_email}" style="font-size:0.83rem;color:#BE1E2D;'
             f'font-weight:600;text-decoration:none;">{poc_email}</a>'
             if poc_email else ""
         )
         headshot_html = (
-            f'<img src="{poc_headshot}" style="width:110px;height:110px;border-radius:50%;'
-            f'object-fit:cover;border:4px solid #F1F5F9;box-shadow:0 2px 8px rgba(0,0,0,0.12);">'
+            f'<img src="{poc_headshot}" style="width:80px;height:80px;border-radius:50%;'
+            f'object-fit:cover;border:3px solid rgba(255,255,255,0.3);flex-shrink:0;">'
             if poc_headshot else
-            '<div style="width:110px;height:110px;border-radius:50%;background:#F1F5F9;'
-            'display:flex;align-items:center;justify-content:center;'
-            'font-size:2.5rem;color:#94A3B8;">👤</div>'
+            '<div style="width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,0.15);'
+            'flex-shrink:0;display:flex;align-items:center;justify-content:center;'
+            'font-size:2rem;color:white;">👤</div>'
         )
         st.markdown(
-            f'<div style="background:white;border-radius:14px;'
-            f'box-shadow:0 4px 20px rgba(0,0,0,0.10);margin-bottom:1.25rem;overflow:hidden;">'
             f'<div style="background:linear-gradient(135deg,#BE1E2D 0%,#8B1520 100%);'
-            f'padding:0.6rem 1rem;text-align:center;">'
-            f'<span style="font-size:0.68rem;font-weight:700;color:rgba(255,255,255,0.9);'
-            f'text-transform:uppercase;letter-spacing:0.1em;">Your Partnerships Manager</span>'
-            f'</div>'
-            f'<div style="padding:1.5rem 1.5rem 1.25rem;text-align:center;">'
-            f'<div style="display:flex;justify-content:center;margin-bottom:1rem;">{headshot_html}</div>'
-            f'<div style="font-size:1.05rem;font-weight:700;color:#1A1A2E;margin-bottom:0.25rem;">'
-            f'{poc_name or "Partnerships Manager"}</div>'
-            f'<div style="font-size:0.8rem;color:#94A3B8;margin-bottom:0.85rem;">'
-            f'Lumiere Education</div>'
-            f'<div style="font-size:0.83rem;color:#64748B;line-height:1.55;margin-bottom:0.75rem;">'
+            f'border-radius:14px;padding:1.25rem 1.75rem;margin-bottom:1.5rem;'
+            f'box-shadow:0 4px 16px rgba(190,30,45,0.25);'
+            f'display:flex;align-items:center;gap:1.5rem;">'
+            f'{headshot_html}'
+            f'<div style="flex:1;">'
+            f'<div style="font-size:0.68rem;font-weight:700;color:rgba(255,255,255,0.7);'
+            f'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.3rem;">Your Partnerships Manager</div>'
+            f'<div style="font-size:1.05rem;font-weight:700;color:white;line-height:1.35;margin-bottom:0.35rem;">'
+            f'{headline}</div>'
+            f'<div style="font-size:0.83rem;color:rgba(255,255,255,0.8);line-height:1.5;margin-bottom:0.35rem;">'
             f'I\'m here to support your partnership with Lumiere. Reach out anytime with questions about your students or our programs.</div>'
-            f'{email_html}'
+            f'<a href="mailto:{poc_email}" style="font-size:0.83rem;color:rgba(255,255,255,0.9);'
+            f'font-weight:600;text-decoration:none;">{poc_email}</a>'
             f'</div>'
             f'</div>',
             unsafe_allow_html=True
         )
 
     if "Onboarding" in view:
-        col_main, col_poc = st.columns([3, 1.6])
-        with col_poc:
-            render_poc_card()
-        with col_main:
-            st.markdown("### Onboarding Tracker")
-            st.markdown("""
-            <div style="background:#F8F9FA;border-left:4px solid #BE1E2D;border-radius:6px;
-                        padding:0.85rem 1rem;margin-bottom:1.25rem;color:#475569;font-size:0.92rem;line-height:1.55;">
-                These are your students who are currently moving through the onboarding pipeline — they have
-                applied and are working through pre-program steps such as mentor matching, interview scheduling,
-                and payment confirmation. Click into any student to view their onboarding status, payment
-                details, and mentor assignment progress.
-            </div>
-            """, unsafe_allow_html=True)
-            ob_names = sorted(set(s["name"].split("|")[0].strip() for s in onboarding))
-            selected_ob = st.selectbox(
-                "Search student", options=["All students"] + ob_names,
-                key="search_onboarding", label_visibility="collapsed",
-            )
-            filtered_onboarding = onboarding if selected_ob == "All students" else [
-                s for s in onboarding if s["name"].split("|")[0].strip() == selected_ob
-            ]
-            render_student_list(filtered_onboarding, "Onboarding Tracker")
+        render_poc_card()
+        st.markdown("### Onboarding Tracker")
+        st.markdown("""
+        <div style="background:#F8F9FA;border-left:4px solid #BE1E2D;border-radius:6px;
+                    padding:0.85rem 1rem;margin-bottom:1.25rem;color:#475569;font-size:0.92rem;line-height:1.55;">
+            These are your students who are currently moving through the onboarding pipeline — they have
+            applied and are working through pre-program steps such as mentor matching, interview scheduling,
+            and payment confirmation. Click into any student to view their onboarding status, payment
+            details, and mentor assignment progress.
+        </div>
+        """, unsafe_allow_html=True)
+        ob_names = sorted(set(s["name"].split("|")[0].strip() for s in onboarding))
+        selected_ob = st.selectbox(
+            "Search student", options=["All students"] + ob_names,
+            key="search_onboarding", label_visibility="collapsed",
+        )
+        filtered_onboarding = onboarding if selected_ob == "All students" else [
+            s for s in onboarding if s["name"].split("|")[0].strip() == selected_ob
+        ]
+        render_student_list(filtered_onboarding, "Onboarding Tracker")
     else:
-        col_main, col_poc = st.columns([3, 1.6])
-        with col_poc:
-            render_poc_card()
-        with col_main:
-            st.markdown("### Program Tracker")
-            st.markdown("""
-            <div style="background:#F8F9FA;border-left:4px solid #BE1E2D;border-radius:6px;
-                        padding:0.85rem 1rem;margin-bottom:1.25rem;color:#475569;font-size:0.92rem;line-height:1.55;">
-                These are your students who are actively enrolled and working through the program. Use this page
-                to track each student's progress against their deadlines and submissions, and to review notes
-                from their mentor sessions.
-            </div>
-            """, unsafe_allow_html=True)
-            prog_names = sorted(set(s["name"].split("|")[0].strip() for s in in_program))
-            selected_prog = st.selectbox(
-                "Search student", options=["All students"] + prog_names,
-                key="search_program", label_visibility="collapsed",
-            )
-            filtered_program = in_program if selected_prog == "All students" else [
-                s for s in in_program if s["name"].split("|")[0].strip() == selected_prog
-            ]
-            render_student_list(filtered_program, "Program Tracker")
+        render_poc_card()
+        st.markdown("### Program Tracker")
+        st.markdown("""
+        <div style="background:#F8F9FA;border-left:4px solid #BE1E2D;border-radius:6px;
+                    padding:0.85rem 1rem;margin-bottom:1.25rem;color:#475569;font-size:0.92rem;line-height:1.55;">
+            These are your students who are actively enrolled and working through the program. Use this page
+            to track each student's progress against their deadlines and submissions, and to review notes
+            from their mentor sessions.
+        </div>
+        """, unsafe_allow_html=True)
+        prog_names = sorted(set(s["name"].split("|")[0].strip() for s in in_program))
+        selected_prog = st.selectbox(
+            "Search student", options=["All students"] + prog_names,
+            key="search_program", label_visibility="collapsed",
+        )
+        filtered_program = in_program if selected_prog == "All students" else [
+            s for s in in_program if s["name"].split("|")[0].strip() == selected_prog
+        ]
+        render_student_list(filtered_program, "Program Tracker")
 
 
 # ──────────────────────────────────────────────
