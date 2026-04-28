@@ -1153,36 +1153,43 @@ def show_student_profile(student):
 # Student list
 # ──────────────────────────────────────────────
 
+def _cohort_sort_key(student):
+    import re
+    parts = [p.strip() for p in student.get("name", "").split("|")]
+    cohort = parts[1] if len(parts) > 1 else ""
+    year_match = re.search(r"\d{4}", cohort)
+    year = int(year_match.group()) if year_match else 0
+    season_order = {"spring": 1, "summer ii": 3, "summer": 2, "fall": 4, "winter": 5}
+    cohort_lower = cohort.lower()
+    season = next((v for k, v in season_order.items() if k in cohort_lower), 0)
+    return (year, season)
+
+
 def render_student_list(students, page_label):
     if not students:
         st.info(f"No students in the {page_label} yet.")
         return
 
+    sorted_students = sorted(students, key=_cohort_sort_key, reverse=True)
+
     # Header row
     st.markdown(
-        '<div style="display:grid;grid-template-columns:2.5fr 2fr 2fr 0.8fr;gap:0.5rem;'
+        '<div style="display:grid;grid-template-columns:3.5fr 2fr 0.8fr;gap:0.5rem;'
         'padding:0.4rem 1rem;margin-bottom:0.25rem;">'
         '<div style="font-size:0.72rem;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:0.05em;">Student</div>'
-        '<div style="font-size:0.72rem;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:0.05em;">Cohort · Program</div>'
         '<div style="font-size:0.72rem;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:0.05em;">Mentor</div>'
         '<div></div>'
         '</div>',
         unsafe_allow_html=True
     )
 
-    for s in students:
-        name_parts = [p.strip() for p in s["name"].split("|")]
-        display_name = name_parts[0]
-        cohort = name_parts[1] if len(name_parts) > 1 else ""
-        program = name_parts[2] if len(name_parts) > 2 else ""
-        cohort_program = " · ".join(filter(None, [cohort, program]))
+    for s in sorted_students:
+        tracker_value = s.get("name", "")
         mentor = s.get("mentor_name") or "Not yet assigned"
 
-        col_name, col_cohort, col_mentor, col_btn = st.columns([2.5, 2, 2, 0.8])
+        col_name, col_mentor, col_btn = st.columns([3.5, 2, 0.8])
         with col_name:
-            st.markdown(f"**{display_name}**")
-        with col_cohort:
-            st.caption(cohort_program)
+            st.markdown(f"**{tracker_value}**")
         with col_mentor:
             st.caption(mentor)
         with col_btn:
