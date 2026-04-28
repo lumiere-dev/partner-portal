@@ -429,7 +429,10 @@ def _build_student(record):
         "completed_meetings":        f.get(STUDENT_FIELDS["completed_meetings"], 0),
         "hours_recorded":            f.get(STUDENT_FIELDS["hours_recorded"], ""),
         "student_no_shows":          unwrap(f.get(STUDENT_FIELDS["student_no_shows"], 0), default=0),
-        "most_recent_meeting_mentor":unwrap(f.get(STUDENT_FIELDS["most_recent_meeting_mentor"], "")),
+        "most_recent_meeting_mentor": next(
+            (unwrap(v) for k, v in f.items() if "most recent" in k.lower()),
+            "",
+        ),
         "revised_final_paper_due":    unwrap(f.get(STUDENT_FIELDS["revised_final_paper_due"], "")),
         "revised_final_paper_upload": f.get(STUDENT_FIELDS["revised_final_paper_upload"], []),
         "submission_portal":          unwrap(f.get(STUDENT_FIELDS["submission_portal"], "")),
@@ -530,6 +533,16 @@ def get_deadlines_for_student(student_id, student_name):
         return []
 
 
+def _fuzzy_get(fields: dict, keyword: str, default=""):
+    """Case-insensitive substring match against field names.
+    Returns the value of the first field whose name contains `keyword`."""
+    kw = keyword.lower()
+    for key, val in fields.items():
+        if kw in key.lower():
+            return val
+    return default
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def get_meeting_notes_for_student(student_name):
     if not student_name:
@@ -544,8 +557,8 @@ def get_meeting_notes_for_student(student_name):
         records = tables["progress"].all(formula=formula)
         notes = [
             {
-                "date":  r["fields"].get("Date of meeting", ""),
-                "notes": r["fields"].get("Meeting Notes Between Mentor & Student", ""),
+                "date":  _fuzzy_get(r["fields"], "date of meeting"),
+                "notes": _fuzzy_get(r["fields"], "meeting notes between"),
             }
             for r in records
         ]
@@ -1054,8 +1067,9 @@ def show_meeting_summary(student):
         st.markdown("**🚫 Number of Student No Shows**")
         st.markdown(str(student.get("student_no_shows", 0) or 0))
     with col5:
-        st.markdown("**🧑‍🏫 Most Recent Meeting Mentor**")
-        st.markdown(student.get("most_recent_meeting_mentor", "") or "—")
+        st.markdown("**🧑‍🏫 Date of most recent meeting with mentor**")
+        raw_date = student.get("most_recent_meeting_mentor", "") or ""
+        st.markdown(format_date(raw_date) if raw_date else "—")
 
     st.markdown("---")
     st.markdown("### Meeting Notes with Student")
