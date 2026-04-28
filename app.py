@@ -66,19 +66,20 @@ def get_partner_name(email):
 def get_partner_info(email):
     try:
         safe = email.strip().lower().replace("'", "\\'")
-        tables = get_tables()
-        records = tables["students"].all(
-            formula=f"FIND('{safe}', LOWER(ARRAYJOIN({{Stacker ID (Partner)}}, ',')))",
-            fields=["BD PoC Headshot", "BD PoC (Partner Escalations)"],
+        records = get_partner_table().all(
+            formula=f"LOWER({{Stacker log-in Email}}) = '{safe}'",
+            fields=["BD POC (Lumiere)", "Headshot (from BD POC (Linked))"],
             max_records=1,
         )
         if records:
             f = records[0]["fields"]
             headshot_url = ""
-            raw = f.get("BD PoC Headshot", [])
-            if isinstance(raw, list) and raw:
-                headshot_url = raw[0].get("url", "")
-            poc_raw = f.get("BD PoC (Partner Escalations)", "")
+            raw_headshot = f.get("Headshot (from BD POC (Linked))", [])
+            if isinstance(raw_headshot, list) and raw_headshot:
+                first = raw_headshot[0]
+                if isinstance(first, dict):
+                    headshot_url = first.get("url", "")
+            poc_raw = f.get("BD POC (Lumiere)", "")
             poc_name = poc_raw[0] if isinstance(poc_raw, list) and poc_raw else (poc_raw or "")
             return {"bd_poc_name": poc_name, "bd_poc_headshot_url": headshot_url}
     except Exception:
