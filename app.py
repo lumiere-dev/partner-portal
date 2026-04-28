@@ -90,7 +90,8 @@ def get_partner_info(email):
             if linked_ids:
                 poc_record = get_bd_poc_table().get(linked_ids[0])
                 poc_name = poc_record["fields"].get("Name", "")
-                poc_email = poc_record["fields"].get("BD POC Email", "")
+                poc_email_raw = poc_record["fields"].get("BD POC Email", "")
+                poc_email = poc_email_raw[0] if isinstance(poc_email_raw, list) and poc_email_raw else (poc_email_raw or "")
             return {"bd_poc_name": poc_name, "bd_poc_email": poc_email, "bd_poc_headshot_url": headshot_url}
     except Exception:
         pass
