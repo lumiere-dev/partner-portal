@@ -461,6 +461,17 @@ def get_students_for_partner(partner_email):
         return []
 
 
+def _is_upcoming_cohort(raw):
+    val = raw[0] if isinstance(raw, list) and raw else raw
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, str):
+        return val.strip().lower() == "true"
+    if isinstance(val, (int, float)):
+        return bool(val)
+    return False
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def get_onboarding_students(partner_email):
     tables = get_tables()
@@ -473,7 +484,10 @@ def get_onboarding_students(partner_email):
             f")"
         )
         records = tables["students"].all(formula=formula)
-        return [_build_student(r) for r in records]
+        return [
+            _build_student(r) for r in records
+            if _is_upcoming_cohort(r["fields"].get("Upcoming Cohort (Cohort Table)"))
+        ]
     except Exception as e:
         st.error(f"Error fetching onboarding students: {e}")
         return []
