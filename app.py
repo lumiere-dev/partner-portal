@@ -60,6 +60,19 @@ def get_staff_name(record_id):
         return ""
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def _partner_exists(email):
+    """Lightweight check: returns True if any student record is linked to this email."""
+    tables = get_tables()
+    try:
+        safe = email.strip().lower().replace("'", "\\'")
+        formula = f"FIND('{safe}', LOWER(ARRAYJOIN({{Stacker ID (Partner)}}, ',')))"
+        records = tables["students"].all(formula=formula, max_records=1)
+        return bool(records)
+    except Exception:
+        return False
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_partner_name(email):
     try:
@@ -458,6 +471,7 @@ def _build_student(record):
         "revised_final_paper_due":    unwrap(f.get(STUDENT_FIELDS["revised_final_paper_due"], "")),
         "revised_final_paper_upload": f.get(STUDENT_FIELDS["revised_final_paper_upload"], []),
         "submission_portal":          unwrap(f.get(STUDENT_FIELDS["submission_portal"], "")),
+        "upcoming_cohort":            f.get("Upcoming Cohort (Cohort Table)"),
     }
 
 
@@ -485,43 +499,17 @@ def _is_upcoming_cohort(raw):
     return False
 
 
-@st.cache_data(ttl=300, show_spinner=False)
 def get_onboarding_students(partner_email):
-    tables = get_tables()
-    try:
-        safe = partner_email.lower().replace("'", "\\'")
-        formula = (
-            f"AND("
-            f"FIND('{safe}', LOWER(ARRAYJOIN({{Stacker ID (Partner)}}, ','))), "
-            f"{{Student Confirmed & Launched}} = ''"
-            f")"
-        )
-        records = tables["students"].all(formula=formula)
-        return [
-            _build_student(r) for r in records
-            if _is_upcoming_cohort(r["fields"].get("Upcoming Cohort (Cohort Table)"))
-        ]
-    except Exception as e:
-        st.error(f"Error fetching onboarding students: {e}")
-        return []
+    students = get_students_for_partner(partner_email)
+    return [
+        s for s in students
+        if not s["confirmed_launched"] and _is_upcoming_cohort(s.get("upcoming_cohort"))
+    ]
 
 
-@st.cache_data(ttl=300, show_spinner=False)
 def get_program_students(partner_email):
-    tables = get_tables()
-    try:
-        safe = partner_email.lower().replace("'", "\\'")
-        formula = (
-            f"AND("
-            f"FIND('{safe}', LOWER(ARRAYJOIN({{Stacker ID (Partner)}}, ','))), "
-            f"{{Student Confirmed & Launched}} = 'Yes'"
-            f")"
-        )
-        records = tables["students"].all(formula=formula)
-        return [_build_student(r) for r in records]
-    except Exception as e:
-        st.error(f"Error fetching program students: {e}")
-        return []
+    students = get_students_for_partner(partner_email)
+    return [s for s in students if s["confirmed_launched"].strip().lower() == "yes"]
 
 
 DEADLINE_FETCH_FIELDS = [
@@ -757,8 +745,8 @@ def show_login_page():
                     if email_input:
                         clean_email = email_input.strip().lower()
                         with st.spinner("Looking up your account..."):
-                            students = get_students_for_partner(clean_email)
-                        if students:
+                            found = _partner_exists(clean_email)
+                        if found:
                             if send_magic_link(clean_email):
                                 st.session_state.magic_link_sent = True
                                 st.rerun()
@@ -773,13 +761,14 @@ def show_login_page():
                 preview_email = st.text_input("Partner Email", placeholder="Enter partner email to preview")
                 if st.form_submit_button("Preview as Partner", use_container_width=True):
                     if preview_email:
+                        email_key = preview_email.strip().lower()
                         with st.spinner("Looking up partner..."):
-                            students = get_students_for_partner(preview_email.strip().lower())
-                        if students:
+                            found = _partner_exists(email_key)
+                        if found:
                             st.session_state.authenticated = True
-                            st.session_state.partner_email = preview_email.strip().lower()
-                            st.session_state.partner_name = get_partner_name(preview_email.strip().lower())
-                            st.session_state.students = students
+                            st.session_state.partner_email = email_key
+                            st.session_state.partner_name = get_partner_name(email_key)
+                            st.session_state.students = []
                             st.session_state.is_preview = True
                             st.rerun()
                         else:
