@@ -38,7 +38,7 @@ PARTNER_TABLE_ID = "tbl2xFN6arJ8XhW7h"
 
 @st.cache_resource(show_spinner=False)
 def get_airtable_api():
-    return Api(get_secret("AIRTABLE_API_KEY"), timeout=(10, 30), retry_strategy=False)
+    return Api(get_secret("AIRTABLE_API_KEY"), timeout=15, retry_strategy=False)
 
 
 @st.cache_resource(show_spinner=False)
@@ -64,13 +64,10 @@ def get_staff_name(record_id):
 def _partner_exists(email):
     """Lightweight check: returns True if any student record is linked to this email."""
     tables = get_tables()
-    try:
-        safe = email.strip().lower().replace("'", "\\'")
-        formula = f"FIND('{safe}', LOWER(ARRAYJOIN({{Stacker ID (Partner)}}, ',')))"
-        records = tables["students"].all(formula=formula, max_records=1)
-        return bool(records)
-    except Exception:
-        return False
+    safe = email.strip().lower().replace("'", "\\'")
+    formula = f"FIND('{safe}', LOWER(ARRAYJOIN({{Stacker ID (Partner)}}, ',')))"
+    records = tables["students"].all(formula=formula, max_records=1)
+    return bool(records)
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -213,8 +210,14 @@ STUDENT_FIELDS = {
     "interview_invitation_sent":"OB: Interview Invitation Sent",
     "interview_invitation_date":"OB: Date of Interview Invitation Sent",
     "deposit_paid":             "OB: Deposit Paid",
+    "deposit_invoice_sent":     "Invoice Sent for Deposit",
+    "deposit_invoice_date":     "OB: Date of deposit invoice sent",
+    "deposit_payment_date":     "OB: Date of deposit payment",
+    "full_tuition_invoice_sent":"Full Tuition Invoice Sent",
     "full_tuition_paid":        "OB: Full Tuition Paid",
+    "full_tuition_payment_date":"OB: Date of full tuition payment",
     "financial_aid":            "Financial Aid Allocation",
+    "mentor_background_shared": "OB: Mentor Background Shared",
     "mentor_outreach_date":     "OB: Mentor Outreach date (for automations)",
     "interview_notes":          "Interview Notes For The Mentor",
     "confirmed_launched":       "Student Confirmed & Launched",
@@ -230,6 +233,7 @@ STUDENT_FIELDS = {
     "revised_final_paper_due":  "PM: Student's Revised Final Paper - Due date",
     "revised_final_paper_upload": "Revised Final Paper upload (from Mentor-Student Progress Up Date)",
     "submission_portal":        "Student Submission Portal Lookup",
+    "cohort_start_date":        "Cohort Start Date",
 }
 
 DEADLINE_FIELDS = {
@@ -372,14 +376,19 @@ def clean_field(val, default=""):
 
 
 def format_date(date_str):
-    if not date_str:
+    if date_str is None or date_str == "":
         return "Not set"
+    # pyairtable may coerce formula/date fields to Python date or datetime objects
+    if hasattr(date_str, "year") and hasattr(date_str, "day"):
+        day = date_str.day
+        suffix = "th" if 11 <= day <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
+        return f"{date_str.strftime('%B')} {day}{suffix}, {date_str.year}"
     if isinstance(date_str, list):
         date_str = date_str[0] if date_str else ""
     if not date_str:
         return "Not set"
     try:
-        date_obj = datetime.strptime(date_str[:10], "%Y-%m-%d")
+        date_obj = datetime.strptime(str(date_str)[:10], "%Y-%m-%d")
         day = date_obj.day
         suffix = "th" if 11 <= day <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
         return f"{date_obj.strftime('%B')} {day}{suffix}, {date_obj.year}"
@@ -457,6 +466,12 @@ def _build_student(record):
         "deposit_paid":              clean_field(f.get(STUDENT_FIELDS["deposit_paid"], "")),
         "full_tuition_paid":         clean_field(f.get(STUDENT_FIELDS["full_tuition_paid"], "")),
         "financial_aid":             clean_field(f.get(STUDENT_FIELDS["financial_aid"], "")),
+        "deposit_invoice_sent":      clean_field(f.get(STUDENT_FIELDS["deposit_invoice_sent"], "")),
+        "deposit_invoice_date":      unwrap(f.get(STUDENT_FIELDS["deposit_invoice_date"], "")),
+        "deposit_payment_date":      unwrap(f.get(STUDENT_FIELDS["deposit_payment_date"], "")),
+        "full_tuition_invoice_sent": clean_field(f.get(STUDENT_FIELDS["full_tuition_invoice_sent"], "")),
+        "full_tuition_payment_date": unwrap(f.get(STUDENT_FIELDS["full_tuition_payment_date"], "")),
+        "mentor_background_shared":  clean_field(f.get(STUDENT_FIELDS["mentor_background_shared"], "")),
         "mentor_outreach_date":      unwrap(f.get(STUDENT_FIELDS["mentor_outreach_date"], "")),
         "interview_notes":           clean_field(f.get(STUDENT_FIELDS["interview_notes"], "")),
         "confirmed_launched":        clean_field(f.get(STUDENT_FIELDS["confirmed_launched"], "")),
@@ -471,6 +486,7 @@ def _build_student(record):
         "revised_final_paper_due":    unwrap(f.get(STUDENT_FIELDS["revised_final_paper_due"], "")),
         "revised_final_paper_upload": f.get(STUDENT_FIELDS["revised_final_paper_upload"], []),
         "submission_portal":          unwrap(f.get(STUDENT_FIELDS["submission_portal"], "")),
+        "cohort_start_date":          unwrap(f.get(STUDENT_FIELDS["cohort_start_date"]) or _fuzzy_get(f, "cohort start date") or ""),
         "upcoming_cohort":            f.get("Upcoming Cohort (Cohort Table)"),
     }
 
@@ -745,8 +761,13 @@ def show_login_page():
                     if email_input:
                         clean_email = email_input.strip().lower()
                         with st.spinner("Looking up your account..."):
-                            found = _partner_exists(clean_email)
-                        if found:
+                            try:
+                                found = _partner_exists(clean_email)
+                            except Exception:
+                                found = None
+                        if found is None:
+                            st.error("Could not reach the database. Please try again in a moment.")
+                        elif found:
                             if send_magic_link(clean_email):
                                 st.session_state.magic_link_sent = True
                                 st.rerun()
@@ -763,8 +784,13 @@ def show_login_page():
                     if preview_email:
                         email_key = preview_email.strip().lower()
                         with st.spinner("Looking up partner..."):
-                            found = _partner_exists(email_key)
-                        if found:
+                            try:
+                                found = _partner_exists(email_key)
+                            except Exception:
+                                found = None
+                        if found is None:
+                            st.error("Could not reach the database. Please try again in a moment.")
+                        elif found:
                             st.session_state.authenticated = True
                             st.session_state.partner_email = email_key
                             st.session_state.partner_name = get_partner_name(email_key)
@@ -799,111 +825,190 @@ def show_applicant_onboarding(student):
     display_name = name_parts[0]
     program = name_parts[2] if len(name_parts) > 2 else ""
     cohort = student.get("cohort") or (name_parts[1] if len(name_parts) > 1 else "")
-
-    # Student overview
-    st.markdown("#### Student Details")
-    st.markdown(
-        '<div class="info-card">'
-        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.25rem;">'
-        + fb("Student Name", display_name)
-        + fb("Program", program)
-        + fb("Cohort", cohort)
-        + fb("Areas of Interest", student.get("areas_of_interest"))
-        + '</div></div>',
-        unsafe_allow_html=True
-    )
-
-    # Payment / participation status
-    st.markdown("#### Application Status")
-    st.markdown(
-        '<div class="info-card">'
-        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.25rem;">'
-        + fb("Participation Decision", student.get("participation_decision"))
-        + fb("Has the student paid the deposit?", student.get("deposit_paid"))
-        + fb("Has the student paid full tuition?", student.get("full_tuition_paid"))
-        + fb("Financial Aid Allocation", student.get("financial_aid"))
-        + fb("Interview Invitation Sent", student.get("interview_invitation_sent"))
-        + '</div></div>',
-        unsafe_allow_html=True
-    )
-
-    # Key dates
-    st.markdown(
-        '<div class="info-card">'
-        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.25rem;">'
-        + fb("Date Interview Conducted", format_date(student.get("interview_invitation_date")))
-        + fb("Date we reached out to mentor regarding this student", format_date(student.get("mentor_outreach_date")))
-        + '</div></div>',
-        unsafe_allow_html=True
-    )
-
     is_launched = str(student.get("confirmed_launched") or "").strip().lower() == "yes"
-    mentor_prefix = "Mentor's" if is_launched else "Proposed mentor's"
+    mentor_confirmed = str(student.get("mentor_confirmation") or "").strip().lower() == "yes"
+    mentor_prefix = "Mentor's" if mentor_confirmed else "Proposed mentor's"
 
-    # Program Manager (launched students only)
+    stages_done = [
+        True,
+        str(student.get("interview_invitation_sent", "") or "").strip().lower() == "yes",
+        str(student.get("deposit_paid", "") or "").strip().lower() == "yes",
+        str(student.get("mentor_confirmation", "") or "").strip().lower() == "yes",
+        str(student.get("full_tuition_paid", "") or "").strip().lower() == "yes",
+    ]
+    current_idx = next((i for i, done in enumerate(stages_done) if not done), len(stages_done))
+
+    def _circle(i, done, is_current):
+        if done:
+            bg, border, fg, icon = "#16A34A", "#16A34A", "white", "✓"
+        elif is_current:
+            bg, border, fg, icon = "white", "#BE1E2D", "#BE1E2D", str(i + 1)
+        else:
+            bg, border, fg, icon = "#F1F5F9", "#CBD5E1", "#94A3B8", str(i + 1)
+        return (
+            f'<div style="width:40px;height:40px;border-radius:50%;background:{bg};'
+            f'color:{fg};border:2.5px solid {border};box-sizing:border-box;'
+            f'display:flex;align-items:center;justify-content:center;'
+            f'font-size:1rem;font-weight:700;flex-shrink:0;">{icon}</div>'
+        )
+
+    def _connector(done):
+        color = "#16A34A" if done else "#E2E8F0"
+        return f'<div style="width:3px;flex:1;background:{color};margin:4px auto;border-radius:2px;min-height:28px;"></div>'
+
+    def _stage_label(name, done, is_current):
+        color = "#16A34A" if done else ("#BE1E2D" if is_current else "#94A3B8")
+        suffix = (
+            ' <span style="font-weight:400;font-size:0.7rem;opacity:0.7;">· Complete</span>' if done else
+            ' <span style="font-weight:400;font-size:0.7rem;">· Current stage</span>' if is_current else ""
+        )
+        return (
+            f'<div style="font-size:0.75rem;font-weight:700;color:{color};'
+            f'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.6rem;">'
+            f'{name}{suffix}</div>'
+        )
+
+    def _card(content, done, is_current, is_future):
+        if is_current:
+            style = ("background:white;border-radius:12px;padding:1.25rem;"
+                     "border:2px solid #BE1E2D;box-shadow:0 4px 20px rgba(190,30,45,0.12);")
+        elif done:
+            style = ("background:white;border-radius:12px;padding:1.25rem;"
+                     "border:1px solid #DCFCE7;box-shadow:0 2px 8px rgba(0,0,0,0.05);")
+        else:
+            style = "background:#F8FAFC;border-radius:12px;padding:1.25rem;border:1px solid #E2E8F0;"
+        return f'<div style="{style}">{content}</div>'
+
+    def _grid(*fields, cols=3):
+        return (
+            f'<div style="display:grid;grid-template-columns:{"1fr " * cols};gap:0.75rem 1.5rem;">'
+            + "".join(fields) + '</div>'
+        )
+
+    def _pending(msg):
+        return f'<p style="color:#94A3B8;font-size:0.9rem;margin:0;">{msg}</p>'
+
+    # ── Stage 1: Applied ──────────────────────────────────────────────────────
+    s1 = _grid(
+        fb("Student", display_name),
+        fb("Program", program),
+        fb("Cohort", cohort),
+        fb("Cohort Start Date", format_date(student.get("cohort_start_date", ""))),
+        fb("Areas of Interest", student.get("areas_of_interest") or "—"),
+    )
+
+    # ── Stage 2: Interview ────────────────────────────────────────────────────
+    if stages_done[1]:
+        s2 = _grid(fb("Interview Date", format_date(student.get("interview_invitation_date"))), cols=1)
+    else:
+        s2 = _pending("Interview invitation not yet sent.")
+
+    # ── Stage 3: Deposit ──────────────────────────────────────────────────────
+    invoice_date_val = format_date(student.get("deposit_invoice_date", ""))
+    if stages_done[2]:
+        s3 = _grid(
+            fb("Deposit Paid", '<span style="background:#DCFCE7;color:#166534;padding:0.15rem 0.65rem;border-radius:20px;font-size:0.85rem;font-weight:600;">Yes</span>'),
+            fb("Financial Aid", student.get("financial_aid") or "—"),
+            fb("Date of Deposit Invoice Sent", invoice_date_val),
+            fb("Date of Deposit Payment", format_date(student.get("deposit_payment_date", ""))),
+            cols=3,
+        )
+    else:
+        s3 = _grid(fb("Date of Deposit Invoice Sent", invoice_date_val), cols=1)
+
+    # ── Stage 4: Mentor Match ─────────────────────────────────────────────────
+    show_mentor = str(student.get("mentor_background_shared", "") or "").strip().lower() == "yes" or is_launched
+    if show_mentor:
+        cv_raw = student.get("mentor_cv")
+        cv_val = (
+            " ".join(
+                f'<a href="{a.get("url","")}" target="_blank" style="color:#BE1E2D;text-decoration:none;">'
+                f'{a.get("filename", "Download CV")}</a>'
+                for a in cv_raw if isinstance(a, dict) and a.get("url")
+            ) or "—"
+        ) if isinstance(cv_raw, list) and cv_raw else "—"
+
+        confirmation = (student.get("mentor_confirmation") or "").strip()
+        if confirmation.lower() == "yes":
+            conf_val = '<span style="background:#DBEAFE;color:#1D4ED8;padding:0.15rem 0.65rem;border-radius:20px;font-size:0.85rem;font-weight:600;">Yes</span>'
+        elif confirmation:
+            conf_val = f'<span style="background:#FEF3C7;color:#92400E;padding:0.15rem 0.65rem;border-radius:20px;font-size:0.85rem;font-weight:600;">{confirmation}</span>'
+        else:
+            conf_val = "—"
+
+        notes = (student.get("interview_notes") or "").strip()
+        notes_val = (
+            f'<div style="font-size:0.9rem;color:#475569;line-height:1.6;white-space:pre-wrap;font-weight:400;">{notes}</div>'
+            if notes and notes not in ("-----",) else "—"
+        )
+        s4 = (
+            _grid(
+                fb(f"{mentor_prefix} Name", student.get("mentor_name") or "Not yet assigned"),
+                fb(f"{mentor_prefix} University", student.get("mentor_university") or "—"),
+                fb(f"{mentor_prefix} CV", cv_val),
+                fb("Date We Reached Out to Mentor", format_date(student.get("mentor_outreach_date"))),
+                fb("Has Mentor Confirmed?", conf_val),
+            )
+            + '<div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid #F1F5F9;">'
+            + fb("Interview Notes Shared with Mentor", notes_val)
+            + '</div>'
+        )
+    else:
+        s4 = _pending("Mentor details will appear here once the background has been shared.")
+
+    # ── Stage 5: Full Tuition ─────────────────────────────────────────────────
+    tuition_badge_yes = '<span style="background:#DCFCE7;color:#166534;padding:0.15rem 0.65rem;border-radius:20px;font-size:0.85rem;font-weight:600;">Yes</span>'
     if is_launched:
         pm_ids = student.get("pm_ids", [])
         pm_name = get_staff_name(pm_ids[0]) if pm_ids else ""
-        pm_email = student.get("pm_email", "")
-        pm_email_html = (
+        pm_email = student.get("pm_email", "") or ""
+        pm_email_val = (
             f'<a href="mailto:{pm_email}" style="color:#BE1E2D;text-decoration:none;">{pm_email}</a>'
             if pm_email else "—"
         )
-        st.markdown(
-            '<div class="info-card">'
-            '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.25rem;">'
-            + fb("Program Manager", pm_name or "—")
-            + fb("Program Manager Email", pm_email_html)
-            + '</div></div>',
-            unsafe_allow_html=True
+        s5 = _grid(
+            fb("Full Tuition Paid", tuition_badge_yes),
+            fb("Date of Full Tuition Payment", format_date(student.get("full_tuition_payment_date", ""))),
+            fb("Program Manager", pm_name or "—"),
+            fb("Program Manager Email", pm_email_val),
         )
-
-    # Mentor CV
-    cv_raw = student.get("mentor_cv")
-    if isinstance(cv_raw, list) and cv_raw:
-        cv_html = " ".join(
-            f'<a href="{a.get("url","")}" target="_blank" '
-            f'style="color:#BE1E2D;text-decoration:none;">{a.get("filename","Download CV")}</a>'
-            for a in cv_raw if a.get("url")
-        ) or "—"
+    elif stages_done[4]:
+        s5 = _grid(
+            fb("Full Tuition Paid", tuition_badge_yes),
+            fb("Date of Full Tuition Payment", format_date(student.get("full_tuition_payment_date", ""))),
+            cols=2,
+        )
     else:
-        cv_html = "—"
+        s5 = _pending("Awaiting full tuition payment.")
 
-    st.markdown(
-        '<div class="info-card">'
-        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.25rem;">'
-        + fb(f"{mentor_prefix} name", student.get("mentor_name") or "Not yet assigned")
-        + fb(f"{mentor_prefix} university", student.get("mentor_university"))
-        + fb(f"{mentor_prefix} CV", cv_html)
-        + '</div></div>',
-        unsafe_allow_html=True
-    )
+    # ── Render vertical timeline ──────────────────────────────────────────────
+    stage_defs = [
+        ("Applied",      s1, stages_done[0]),
+        ("Interview",    s2, stages_done[1]),
+        ("Deposit",      s3, stages_done[2]),
+        ("Mentor Match", s4, stages_done[3]),
+        ("Full Tuition", s5, stages_done[4]),
+    ]
 
-    # Mentor confirmation + interview notes side by side
-    confirmation = student.get("mentor_confirmation") or ""
-    if confirmation.strip().lower() == "yes":
-        conf_html = '<span style="background:#DBEAFE;color:#1D4ED8;padding:0.2rem 0.75rem;border-radius:20px;font-size:0.9rem;font-weight:600;display:inline-block;">Yes</span>'
-    elif confirmation.strip():
-        conf_html = f'<span style="background:#FEF3C7;color:#92400E;padding:0.2rem 0.75rem;border-radius:20px;font-size:0.9rem;font-weight:600;display:inline-block;">{confirmation}</span>'
-    else:
-        conf_html = "—"
-
-    notes = student.get("interview_notes") or ""
-    notes_clean = notes.strip()
-    notes_html = (
-        f'<div style="font-size:0.92rem;color:#475569;line-height:1.6;white-space:pre-wrap;">{notes_clean}</div>'
-        if notes_clean and notes_clean not in ("-----",) else
-        '<span style="color:#94A3B8;">—</span>'
-    )
-
-    st.markdown(
-        '<div class="info-card">'
-        '<div style="display:grid;grid-template-columns:1fr 2fr;gap:1.5rem;">'
-        + fb("Has mentor confirmed the match?", conf_html)
-        + fb("Summary of notes from student interview", notes_html)
-        + '</div></div>',
-        unsafe_allow_html=True
-    )
+    parts = ['<div style="margin-top:0.25rem;">']
+    for i, (name, content, done) in enumerate(stage_defs):
+        is_current = (i == current_idx)
+        is_future = not done and not is_current
+        is_last = (i == len(stage_defs) - 1)
+        parts.append(
+            f'<div style="display:flex;gap:1.25rem;{"opacity:0.45;" if is_future else ""}">'
+            f'<div style="display:flex;flex-direction:column;align-items:center;flex:0 0 40px;">'
+            + _circle(i, done, is_current)
+            + ('' if is_last else _connector(done))
+            + '</div>'
+            f'<div style="flex:1;padding-bottom:{"0" if is_last else "1.75rem"};">'
+            + _stage_label(name, done, is_current)
+            + _card(content, done, is_current, is_future)
+            + '</div>'
+            '</div>'
+        )
+    parts.append('</div>')
+    st.markdown("".join(parts), unsafe_allow_html=True)
 
 
 def _render_submission_value(value, label=None):
@@ -1155,7 +1260,7 @@ def show_student_profile(student):
 
     if is_launched:
         tab1, tab2, tab3 = st.tabs([
-            "📋 Applicant Onboarding",
+            "📋 Student Details",
             "📅 Progress Tracker",
             "🤝 Mentor Meeting Summary",
         ])
@@ -1185,7 +1290,62 @@ def _cohort_sort_key(student):
     return (year, season)
 
 
-def render_student_list(students, page_label):
+def _onboarding_stage_html(student, large=False):
+    stages = [
+        ("Applied",      True),
+        ("Interview",    str(student.get("interview_invitation_sent", "") or "").strip().lower() == "yes"),
+        ("Deposit",      str(student.get("deposit_paid", "") or "").strip().lower() == "yes"),
+        ("Mentor Match", str(student.get("mentor_confirmation", "") or "").strip().lower() == "yes"),
+        ("Full Tuition", str(student.get("full_tuition_paid", "") or "").strip().lower() == "yes"),
+    ]
+
+    current_idx = next((i for i, (_, done) in enumerate(stages) if not done), len(stages))
+
+    circle_size  = "32px" if large else "22px"
+    icon_font    = "0.8rem" if large else "0.65rem"
+    label_font   = "0.75rem" if large else "0.62rem"
+    line_top     = "15px" if large else "10px"
+    line_height  = "3px" if large else "2px"
+    padding      = "0.5rem 0 0.6rem" if large else "0.2rem 0 0.35rem"
+
+    parts = []
+    for i, (label, done) in enumerate(stages):
+        is_current = (i == current_idx)
+        if done:
+            circle_bg, circle_border, circle_fg = "#16A34A", "#16A34A", "white"
+            icon, label_color, label_weight = "✓", "#16A34A", "600"
+        elif is_current:
+            circle_bg, circle_border, circle_fg = "white", "#BE1E2D", "#BE1E2D"
+            icon, label_color, label_weight = str(i + 1), "#BE1E2D", "700"
+        else:
+            circle_bg, circle_border, circle_fg = "#F1F5F9", "#CBD5E1", "#94A3B8"
+            icon, label_color, label_weight = str(i + 1), "#94A3B8", "400"
+
+        parts.append(
+            f'<div style="display:flex;flex-direction:column;align-items:center;flex:0 0 auto;">'
+            f'<div style="width:{circle_size};height:{circle_size};border-radius:50%;background:{circle_bg};'
+            f'color:{circle_fg};border:2px solid {circle_border};box-sizing:border-box;'
+            f'display:flex;align-items:center;justify-content:center;'
+            f'font-size:{icon_font};font-weight:700;">{icon}</div>'
+            f'<div style="font-size:{label_font};color:{label_color};font-weight:{label_weight};'
+            f'margin-top:4px;text-align:center;white-space:nowrap;">{label}</div>'
+            f'</div>'
+        )
+        if i < len(stages) - 1:
+            line_color = "#16A34A" if done else "#E2E8F0"
+            parts.append(
+                f'<div style="flex:1;height:{line_height};background:{line_color};'
+                f'align-self:flex-start;margin-top:{line_top};min-width:8px;"></div>'
+            )
+
+    return (
+        f'<div style="display:flex;align-items:flex-start;padding:{padding};">'
+        + "".join(parts)
+        + "</div>"
+    )
+
+
+def render_student_list(students, page_label, show_pipeline=False):
     if not students:
         st.info(f"No students in the {page_label} yet.")
         return
@@ -1216,6 +1376,8 @@ def render_student_list(students, page_label):
             if st.button("View →", key=f"view_{s['id']}"):
                 st.session_state.selected_student = s
                 st.rerun()
+        if show_pipeline:
+            st.markdown(_onboarding_stage_html(s), unsafe_allow_html=True)
         st.markdown('<hr style="margin:0.3rem 0;border-color:#F1F5F9;">', unsafe_allow_html=True)
 
 
@@ -1369,7 +1531,7 @@ def show_dashboard():
         filtered_onboarding = onboarding if selected_ob == "All students" else [
             s for s in onboarding if s["name"].split("|")[0].strip() == selected_ob
         ]
-        render_student_list(filtered_onboarding, "Onboarding Tracker")
+        render_student_list(filtered_onboarding, "Onboarding Tracker", show_pipeline=True)
     else:
         render_poc_card()
         st.markdown("### Program Tracker")
