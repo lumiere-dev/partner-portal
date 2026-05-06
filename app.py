@@ -5,7 +5,7 @@ from pyairtable import Api
 from datetime import datetime, timedelta, timezone
 import resend
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
-from streamlit_cookies_controller import CookieController
+import extra_streamlit_components as stx
 
 
 def get_secret(key, default=None):
@@ -349,7 +349,7 @@ for _key, _default in [
     if _key not in st.session_state:
         st.session_state[_key] = _default
 
-cookies = CookieController()
+cookie_manager = stx.CookieManager(key="partner_portal")
 
 
 # ──────────────────────────────────────────────
@@ -629,10 +629,7 @@ def get_meeting_notes_for_student(student_name):
 def check_session_cookie():
     if st.session_state.authenticated:
         return
-    try:
-        token = cookies.get("partner_session")
-    except TypeError:
-        return
+    token = cookie_manager.get("partner_session")
     if token:
         email = verify_session_token(token)
         if email:
@@ -645,7 +642,7 @@ def check_session_cookie():
             st.session_state.is_preview = False
             st.rerun()
         else:
-            cookies.remove("partner_session")
+            cookie_manager.delete("partner_session")
 
 
 def check_magic_link_token():
@@ -662,8 +659,8 @@ def check_magic_link_token():
         st.session_state.students = students
         st.session_state.is_preview = False
         st.session_state.pending_session_cookie = email
-        st.query_params.clear()
-        st.rerun()
+        # No rerun — let the script continue directly to show_dashboard().
+        # The token URL is cleaned up at the entry point below.
     else:
         st.error("This login link has expired or is invalid. Please request a new one.")
         st.query_params.clear()
@@ -1495,8 +1492,7 @@ def show_dashboard():
             st.rerun()
         if st.button("Logout"):
             try:
-                if cookies.get("partner_session"):
-                    cookies.remove("partner_session")
+                cookie_manager.delete("partner_session")
             except Exception:
                 pass
             st.session_state.update({
@@ -1669,12 +1665,15 @@ check_magic_link_token()
 if "pending_session_cookie" in st.session_state and st.session_state.pending_session_cookie:
     try:
         token = generate_session_token(st.session_state.pending_session_cookie)
-        cookies.set("partner_session", token, max_age=30 * 24 * 3600)
+        expires = datetime.now(timezone.utc) + timedelta(days=30)
+        cookie_manager.set("partner_session", token, expires_at=expires)
         st.session_state.pending_session_cookie = None
-    except TypeError:
-        pass  # Cookie controller not ready yet; will succeed on next natural render
+    except Exception:
+        pass
 
 if not st.session_state.authenticated:
     show_login_page()
 else:
+    if "token" in st.query_params:
+        st.query_params.clear()
     show_dashboard()
