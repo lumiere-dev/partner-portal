@@ -62,11 +62,13 @@ def get_staff_name(record_id):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _partner_exists(email):
-    """Lightweight check: returns True if any student record is linked to this email."""
-    tables = get_tables()
+    """Lightweight check: returns True if this email matches a partner account."""
     safe = email.strip().lower().replace("'", "\\'")
-    formula = f"FIND('{safe}', LOWER(ARRAYJOIN({{Stacker ID (Partner)}}, ',')))"
-    records = tables["students"].all(formula=formula, max_records=1)
+    records = get_partner_table().all(
+        formula=f"LOWER({{Stacker log-in Email}}) = '{safe}'",
+        fields=["Stacker log-in Email"],
+        max_records=1,
+    )
     return bool(records)
 
 
@@ -122,9 +124,9 @@ def get_tables():
     api = get_airtable_api()
     base = api.base(BASE_ID)
     return {
-        "students": base.table(STUDENT_TABLE_ID),
+        "students":  base.table(STUDENT_TABLE_ID),
         "deadlines": base.table(DEADLINES_TABLE_ID),
-        "progress": base.table(PROGRESS_TABLE_ID),
+        "progress":  base.table(PROGRESS_TABLE_ID),
     }
 
 
@@ -222,6 +224,10 @@ STUDENT_FIELDS = {
     "interview_notes":          "Interview Notes For The Mentor",
     "confirmed_launched":       "Student Confirmed & Launched",
     "partner_id":               "Stacker ID (Partner)",
+    "white_label":              "White Label or Partner Payment Program",
+    "status_in_program":        "PM: Status in Program",
+    "publication_marker":       "Publication Marker",
+    "publication_outcome":      "PS: Latest Publication Outcome - Latest",
     # Progress tracker + meeting summary
     "expected_meetings":        "Number of Expected Meetings - Student/Mentor",
     "completed_meetings":       "[Current + Archived] No. of Meetings Completed",
@@ -450,6 +456,10 @@ def _build_student(record):
     raw_cohort = clean_field(f.get(STUDENT_FIELDS["cohort"], ""))
     cohort = raw_cohort or (name_parts[1] if len(name_parts) > 1 else "")
 
+    pub_outcome = clean_field(f.get(STUDENT_FIELDS["publication_outcome"], "")).strip().lower()
+    rfp_raw     = f.get(STUDENT_FIELDS["revised_final_paper_upload"], [])
+    program_complete = bool(rfp_raw) or "accepted" in pub_outcome
+
     return {
         "id": record["id"],
         "name":                      name,
@@ -475,6 +485,9 @@ def _build_student(record):
         "mentor_outreach_date":      unwrap(f.get(STUDENT_FIELDS["mentor_outreach_date"], "")),
         "interview_notes":           clean_field(f.get(STUDENT_FIELDS["interview_notes"], "")),
         "confirmed_launched":        clean_field(f.get(STUDENT_FIELDS["confirmed_launched"], "")),
+        "white_label":               clean_field(f.get(STUDENT_FIELDS["white_label"], "")),
+        "status_in_program":         clean_field(f.get(STUDENT_FIELDS["status_in_program"], "")),
+        "program_complete":          program_complete,
         "partner_emails":            partner_emails,
         "expected_meetings":         f.get(STUDENT_FIELDS["expected_meetings"], 0),
         "completed_meetings":        f.get(STUDENT_FIELDS["completed_meetings"], 0),
@@ -484,7 +497,7 @@ def _build_student(record):
         "pm_email":                  unwrap(f.get(STUDENT_FIELDS["program_manager_email"], "")),
         "most_recent_meeting_mentor":unwrap(f.get(STUDENT_FIELDS["most_recent_meeting_mentor"], "")),
         "revised_final_paper_due":    unwrap(f.get(STUDENT_FIELDS["revised_final_paper_due"], "")),
-        "revised_final_paper_upload": f.get(STUDENT_FIELDS["revised_final_paper_upload"], []),
+        "revised_final_paper_upload": rfp_raw,
         "submission_portal":          unwrap(f.get(STUDENT_FIELDS["submission_portal"], "")),
         "cohort_start_date":          unwrap(f.get(STUDENT_FIELDS["cohort_start_date"]) or _fuzzy_get(f, "cohort start date") or ""),
         "upcoming_cohort":            f.get("Upcoming Cohort (Cohort Table)"),
@@ -526,6 +539,8 @@ def get_onboarding_students(partner_email):
 def get_program_students(partner_email):
     students = get_students_for_partner(partner_email)
     return [s for s in students if s["confirmed_launched"].strip().lower() == "yes"]
+
+
 
 
 DEADLINE_FETCH_FIELDS = [
@@ -829,14 +844,25 @@ def show_applicant_onboarding(student):
     mentor_confirmed = str(student.get("mentor_confirmation") or "").strip().lower() == "yes"
     mentor_prefix = "Mentor's" if mentor_confirmed else "Proposed mentor's"
 
+    is_white_label = bool((student.get("white_label") or "").strip())
+
     stages_done = [
         True,
         str(student.get("interview_invitation_sent", "") or "").strip().lower() == "yes",
-        str(student.get("deposit_paid", "") or "").strip().lower() == "yes",
+        True if is_white_label else str(student.get("deposit_paid", "") or "").strip().lower() == "yes",
         str(student.get("mentor_confirmation", "") or "").strip().lower() == "yes",
-        str(student.get("full_tuition_paid", "") or "").strip().lower() == "yes",
+        True if is_white_label else str(student.get("full_tuition_paid", "") or "").strip().lower() == "yes",
     ]
     current_idx = next((i for i, done in enumerate(stages_done) if not done), len(stages_done))
+
+    if is_white_label:
+        st.markdown(
+            '<div style="background:#FEF9C3;border:1px solid #FDE047;border-radius:8px;'
+            'padding:0.5rem 1rem;margin-bottom:0.75rem;font-size:0.85rem;color:#713F12;">'
+            '<strong>White Label student</strong> — deposit and full tuition stages are managed separately '
+            'and are not tracked here.</div>',
+            unsafe_allow_html=True,
+        )
 
     def _circle(i, done, is_current):
         if done:
@@ -905,7 +931,9 @@ def show_applicant_onboarding(student):
 
     # ── Stage 3: Deposit ──────────────────────────────────────────────────────
     invoice_date_val = format_date(student.get("deposit_invoice_date", ""))
-    if stages_done[2]:
+    if is_white_label:
+        s3 = _pending("N/A — White Label student")
+    elif stages_done[2]:
         s3 = _grid(
             fb("Deposit Paid", '<span style="background:#DCFCE7;color:#166534;padding:0.15rem 0.65rem;border-radius:20px;font-size:0.85rem;font-weight:600;">Yes</span>'),
             fb("Financial Aid", student.get("financial_aid") or "—"),
@@ -958,7 +986,9 @@ def show_applicant_onboarding(student):
 
     # ── Stage 5: Full Tuition ─────────────────────────────────────────────────
     tuition_badge_yes = '<span style="background:#DCFCE7;color:#166534;padding:0.15rem 0.65rem;border-radius:20px;font-size:0.85rem;font-weight:600;">Yes</span>'
-    if is_launched:
+    if is_white_label:
+        s5 = _pending("N/A — White Label student")
+    elif is_launched:
         pm_ids = student.get("pm_ids", [])
         pm_name = get_staff_name(pm_ids[0]) if pm_ids else ""
         pm_email = student.get("pm_email", "") or ""
@@ -1291,12 +1321,13 @@ def _cohort_sort_key(student):
 
 
 def _onboarding_stage_html(student, large=False):
+    is_wl = bool((student.get("white_label") or "").strip())
     stages = [
         ("Applied",      True),
         ("Interview",    str(student.get("interview_invitation_sent", "") or "").strip().lower() == "yes"),
-        ("Deposit",      str(student.get("deposit_paid", "") or "").strip().lower() == "yes"),
+        ("Deposit",      True if is_wl else str(student.get("deposit_paid", "") or "").strip().lower() == "yes"),
         ("Mentor Match", str(student.get("mentor_confirmation", "") or "").strip().lower() == "yes"),
-        ("Full Tuition", str(student.get("full_tuition_paid", "") or "").strip().lower() == "yes"),
+        ("Full Tuition", True if is_wl else str(student.get("full_tuition_paid", "") or "").strip().lower() == "yes"),
     ]
 
     current_idx = next((i for i, (_, done) in enumerate(stages) if not done), len(stages))
@@ -1345,7 +1376,39 @@ def _onboarding_stage_html(student, large=False):
     )
 
 
-def render_student_list(students, page_label, show_pipeline=False):
+def _program_meetings_html(student):
+    completed = int(student.get("completed_meetings") or 0)
+    expected  = int(student.get("expected_meetings")  or 0)
+
+    if not expected:
+        return (
+            '<div style="padding:0.2rem 0 0.35rem;">'
+            '<div style="font-size:0.7rem;color:#94A3B8;">No meeting data</div>'
+            '</div>'
+        )
+
+    pct = min(completed / expected, 1.0)
+    bar_pct = int(pct * 100)
+
+    if pct >= 1.0:
+        bar_color, label_color = "#16A34A", "#16A34A"
+    elif pct >= 0.5:
+        bar_color, label_color = "#F59E0B", "#92400E"
+    else:
+        bar_color, label_color = "#BE1E2D", "#BE1E2D"
+
+    return (
+        f'<div style="display:flex;align-items:center;gap:0.6rem;padding:0.2rem 0 0.35rem;">'
+        f'<div style="flex:1;height:6px;background:#F1F5F9;border-radius:3px;overflow:hidden;">'
+        f'<div style="height:100%;width:{bar_pct}%;background:{bar_color};border-radius:3px;"></div>'
+        f'</div>'
+        f'<div style="font-size:0.72rem;color:{label_color};font-weight:600;white-space:nowrap;">'
+        f'{completed} / {expected} meetings</div>'
+        f'</div>'
+    )
+
+
+def render_student_list(students, page_label, show_pipeline=False, show_meetings=False):
     if not students:
         st.info(f"No students in the {page_label} yet.")
         return
@@ -1366,10 +1429,17 @@ def render_student_list(students, page_label, show_pipeline=False):
     for s in sorted_students:
         tracker_value = s.get("name", "")
         mentor = s.get("mentor_name") or "Not yet assigned"
+        status_in_prog = s.get("status_in_program", "") or ""
 
         col_name, col_mentor, col_btn = st.columns([3.5, 2, 0.8])
         with col_name:
             st.markdown(f"**{tracker_value}**")
+            if status_in_prog in ("Suspended", "Withdrawn"):
+                st.markdown(
+                    f'<div style="font-size:0.75rem;color:#DC2626;margin-top:-0.3rem;margin-bottom:0.15rem;">'
+                    f'⚠️ {status_in_prog}</div>',
+                    unsafe_allow_html=True,
+                )
         with col_mentor:
             st.caption(mentor)
         with col_btn:
@@ -1378,6 +1448,8 @@ def render_student_list(students, page_label, show_pipeline=False):
                 st.rerun()
         if show_pipeline:
             st.markdown(_onboarding_stage_html(s), unsafe_allow_html=True)
+        if show_meetings:
+            st.markdown(_program_meetings_html(s), unsafe_allow_html=True)
         st.markdown('<hr style="margin:0.3rem 0;border-color:#F1F5F9;">', unsafe_allow_html=True)
 
 
@@ -1387,9 +1459,10 @@ def render_student_list(students, page_label, show_pipeline=False):
 
 def show_dashboard():
     partner_email = st.session_state.partner_email
+    partner_name  = st.session_state.partner_name
     with st.spinner("Loading students..."):
-        onboarding = get_onboarding_students(partner_email)
-        in_program = get_program_students(partner_email)
+        onboarding  = get_onboarding_students(partner_email)
+        in_program  = get_program_students(partner_email)
 
     with st.sidebar:
         with open("assets/logo_symbol.png", "rb") as f:
@@ -1415,14 +1488,11 @@ def show_dashboard():
             st.warning("Preview Mode")
         st.markdown("---")
 
-        view = st.radio(
-            "Navigation",
-            [
-                f"Onboarding Tracker  ({len(onboarding)})",
-                f"Program Tracker  ({len(in_program)})",
-            ],
-            label_visibility="collapsed",
-        )
+        nav_options = [
+            f"Onboarding Tracker  ({len(onboarding)})",
+            f"Program Tracker  ({len(in_program)})",
+        ]
+        view = st.radio("Navigation", nav_options, label_visibility="collapsed")
 
         st.markdown("---")
         if st.button("Refresh Data"):
@@ -1459,7 +1529,6 @@ def show_dashboard():
         show_student_profile(st.session_state.selected_student)
         return
 
-    partner_name = st.session_state.partner_name
     if partner_name:
         st.markdown(
             f'<div style="font-size:1.6rem;font-weight:700;color:#1E293B;margin-bottom:0.75rem;">'
@@ -1474,6 +1543,19 @@ def show_dashboard():
 
 
     def render_poc_card():
+        if not poc_name and not poc_email:
+            st.markdown(
+                '<div style="background:#F0F9FF;border:1px solid #BAE6FD;border-radius:12px;'
+                'padding:1rem 1.5rem;margin-bottom:1.5rem;color:#0C4A6E;font-size:0.9rem;line-height:1.65;">'
+                'For questions during the onboarding process, reach out to '
+                '<a href="mailto:admissions@lumiere.education" style="color:#0369A1;font-weight:600;text-decoration:none;">'
+                'admissions@lumiere.education</a>. For questions about students in the program, reach out to '
+                '<a href="mailto:program.manager@lumiere.education" style="color:#0369A1;font-weight:600;text-decoration:none;">'
+                'program.manager@lumiere.education</a>.'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+            return
         headline = (
             f"Hi, I'm {poc_name}, your Partnerships Manager at Lumiere Education."
             if poc_name else "Hi, I'm your Partnerships Manager at Lumiere Education."
@@ -1523,16 +1605,26 @@ def show_dashboard():
             details, and mentor assignment progress.
         </div>
         """, unsafe_allow_html=True)
-        ob_names = sorted(set(s["name"].split("|")[0].strip() for s in onboarding))
-        selected_ob = st.selectbox(
-            "Search student", options=["All students"] + ob_names,
-            key="search_onboarding", label_visibility="collapsed",
-        )
-        filtered_onboarding = onboarding if selected_ob == "All students" else [
-            s for s in onboarding if s["name"].split("|")[0].strip() == selected_ob
+        ob_col_search, ob_col_cohort = st.columns([2, 2])
+        with ob_col_search:
+            ob_names = sorted(set(s["name"].split("|")[0].strip() for s in onboarding))
+            selected_ob = st.selectbox(
+                "Search for a student", options=["All students"] + ob_names,
+                key="search_onboarding",
+            )
+        with ob_col_cohort:
+            ob_cohorts = sorted(set(s.get("cohort", "") for s in onboarding if s.get("cohort")))
+            selected_ob_cohort = st.selectbox(
+                "Filter by cohort", options=["All cohorts"] + ob_cohorts,
+                key="filter_ob_cohort",
+            )
+        filtered_onboarding = [
+            s for s in onboarding
+            if (selected_ob == "All students" or s["name"].split("|")[0].strip() == selected_ob)
+            and (selected_ob_cohort == "All cohorts" or s.get("cohort", "") == selected_ob_cohort)
         ]
         render_student_list(filtered_onboarding, "Onboarding Tracker", show_pipeline=True)
-    else:
+    elif "Program" in view:
         render_poc_card()
         st.markdown("### Program Tracker")
         st.markdown("""
@@ -1543,15 +1635,35 @@ def show_dashboard():
             from their mentor sessions.
         </div>
         """, unsafe_allow_html=True)
-        prog_names = sorted(set(s["name"].split("|")[0].strip() for s in in_program))
-        selected_prog = st.selectbox(
-            "Search student", options=["All students"] + prog_names,
-            key="search_program", label_visibility="collapsed",
-        )
-        filtered_program = in_program if selected_prog == "All students" else [
-            s for s in in_program if s["name"].split("|")[0].strip() == selected_prog
+        prog_col_search, prog_col_cohort, prog_col_status = st.columns([2, 2, 2])
+        with prog_col_search:
+            prog_names = sorted(set(s["name"].split("|")[0].strip() for s in in_program))
+            selected_prog = st.selectbox(
+                "Search for a student", options=["All students"] + prog_names,
+                key="search_program",
+            )
+        with prog_col_cohort:
+            prog_cohorts = sorted(set(s.get("cohort", "") for s in in_program if s.get("cohort")))
+            selected_prog_cohort = st.selectbox(
+                "Filter by cohort", options=["All cohorts"] + prog_cohorts,
+                key="filter_prog_cohort",
+            )
+        with prog_col_status:
+            selected_prog_status = st.selectbox(
+                "Program completion", options=["All", "Complete", "In progress"],
+                key="filter_prog_status",
+            )
+        filtered_program = [
+            s for s in in_program
+            if (selected_prog == "All students" or s["name"].split("|")[0].strip() == selected_prog)
+            and (selected_prog_cohort == "All cohorts" or s.get("cohort", "") == selected_prog_cohort)
+            and (
+                selected_prog_status == "All"
+                or (selected_prog_status == "Complete" and s.get("program_complete"))
+                or (selected_prog_status == "In progress" and not s.get("program_complete"))
+            )
         ]
-        render_student_list(filtered_program, "Program Tracker")
+        render_student_list(filtered_program, "Program Tracker", show_meetings=True)
 
 
 # ──────────────────────────────────────────────
