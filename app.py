@@ -1674,9 +1674,12 @@ check_session_cookie()
 check_magic_link_token()
 
 if "pending_session_cookie" in st.session_state and st.session_state.pending_session_cookie:
-    token = generate_session_token(st.session_state.pending_session_cookie)
-    cookies.set("partner_session", token, max_age=30 * 24 * 3600)
-    st.session_state.pending_session_cookie = None
+    try:
+        token = generate_session_token(st.session_state.pending_session_cookie)
+        cookies.set("partner_session", token, max_age=30 * 24 * 3600)
+        st.session_state.pending_session_cookie = None
+    except TypeError:
+        st.rerun()
 
 if not st.session_state.authenticated:
     show_login_page()
