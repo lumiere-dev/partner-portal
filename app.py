@@ -541,8 +541,6 @@ def get_program_students(partner_email):
     return [s for s in students if s["confirmed_launched"].strip().lower() == "yes"]
 
 
-
-
 DEADLINE_FETCH_FIELDS = [
     "Deadline Name",
     "Student Application & Cohort Tracker",
@@ -640,13 +638,12 @@ def check_session_cookie():
         if email:
             with st.spinner("Loading your portal..."):
                 students = get_students_for_partner(email)
-            if students:
-                st.session_state.authenticated = True
-                st.session_state.partner_email = email
-                st.session_state.partner_name = get_partner_name(email)
-                st.session_state.students = students
-                st.session_state.is_preview = False
-                st.rerun()
+            st.session_state.authenticated = True
+            st.session_state.partner_email = email
+            st.session_state.partner_name = get_partner_name(email)
+            st.session_state.students = students
+            st.session_state.is_preview = False
+            st.rerun()
         else:
             cookies.remove("partner_session")
 
@@ -659,18 +656,14 @@ def check_magic_link_token():
     if email:
         with st.spinner("Loading your portal..."):
             students = get_students_for_partner(email)
-        if students:
-            st.session_state.authenticated = True
-            st.session_state.partner_email = email
-            st.session_state.partner_name = get_partner_name(email)
-            st.session_state.students = students
-            st.session_state.is_preview = False
-            st.session_state.pending_session_cookie = email
-            st.query_params.clear()
-            st.rerun()
-        else:
-            st.error("No students found for this partner email. Please contact the Lumiere team.")
-            st.query_params.clear()
+        st.session_state.authenticated = True
+        st.session_state.partner_email = email
+        st.session_state.partner_name = get_partner_name(email)
+        st.session_state.students = students
+        st.session_state.is_preview = False
+        st.session_state.pending_session_cookie = email
+        st.query_params.clear()
+        st.rerun()
     else:
         st.error("This login link has expired or is invalid. Please request a new one.")
         st.query_params.clear()
@@ -1679,7 +1672,7 @@ if "pending_session_cookie" in st.session_state and st.session_state.pending_ses
         cookies.set("partner_session", token, max_age=30 * 24 * 3600)
         st.session_state.pending_session_cookie = None
     except TypeError:
-        st.rerun()
+        pass  # Cookie controller not ready yet; will succeed on next natural render
 
 if not st.session_state.authenticated:
     show_login_page()
