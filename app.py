@@ -1,5 +1,6 @@
 import os
 import base64
+import concurrent.futures
 import streamlit as st
 from pyairtable import Api
 from datetime import datetime, timedelta, timezone
@@ -62,13 +63,15 @@ def get_staff_name(record_id):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _partner_exists(email):
-    """Lightweight check: returns True if this email matches a partner account."""
     safe = email.strip().lower().replace("'", "\\'")
-    records = get_partner_table().all(
-        formula=f"LOWER({{Stacker log-in Email}}) = '{safe}'",
-        fields=["Stacker log-in Email"],
-        max_records=1,
-    )
+    def _call():
+        return get_partner_table().all(
+            formula=f"LOWER({{Stacker log-in Email}}) = '{safe}'",
+            fields=["Stacker log-in Email"],
+            max_records=1,
+        )
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        records = executor.submit(_call).result(timeout=20)
     return bool(records)
 
 
@@ -76,11 +79,14 @@ def _partner_exists(email):
 def get_partner_name(email):
     try:
         safe = email.strip().lower().replace("'", "\\'")
-        records = get_partner_table().all(
-            formula=f"LOWER({{Stacker log-in Email}}) = '{safe}'",
-            fields=["Partner Name"],
-            max_records=1,
-        )
+        def _call():
+            return get_partner_table().all(
+                formula=f"LOWER({{Stacker log-in Email}}) = '{safe}'",
+                fields=["Partner Name"],
+                max_records=1,
+            )
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            records = executor.submit(_call).result(timeout=20)
         if records:
             return records[0]["fields"].get("Partner Name", "")
     except Exception:
