@@ -34,7 +34,32 @@ BASE_ID = "appK9HemdsQBzVefU"
 STUDENT_TABLE_ID = "tbl0UJnmMwlGyCFGK"
 DEADLINES_TABLE_ID = "tblsGJOAHS4sIxfVr"
 PROGRESS_TABLE_ID = "tblcLCcczpe2G8i1X"
-PARTNER_TABLE_ID = "tbl2xFN6arJ8XhW7h"
+PARTNER_TABLE_ID  = "tbl2xFN6arJ8XhW7h"
+REFERRAL_TABLE_ID = "tbldyQSNWYdTGjZGm"
+
+REFERRAL_PARTNER_EMAIL_FIELD = "fldbCOFBOLNAkMxPB"  # email field on partner table
+REFERRAL_PARTNER_ID_FIELD   = "fldM15JJzzBDYrWPB"  # partner record ID field on referral table
+COHORT_TABLE_ID             = "tblOUDtK8E5VIrQCb"
+PROGRAM_TYPE_TABLE_ID       = "tblJ5CHN2rN4gR27d"
+
+REFERRAL_FIELD_IDS = {
+    "name":              "fldy1UHT8zqKMqBws",
+    "cohort":            "fldgvoVprkWDnn2nZ",
+    "admission":         "fldhxbgvJAzyynp1G",
+    "program_type":      "fldJVeR1a3MoKTi2n",
+    "discount":          "fldQDrfIyTctMEs8J",
+    "original_tuition":  "fldVlSDhjP8G6EOze",
+    "final_tuition":     "fldqfXSLimXv7VZ0V",
+    "net_paid":          "fld0DzHKVxsawKUj6",
+    "payment_method":    "fldy65URdlOKQfssp",
+    "net_received":      "fldUVHZb5tcpp0w9Y",
+    "commission_pct":    "fldwCzoFuqfmpFAqA",
+    "commission_amount": "fldc4XjmaEIXcobls",
+    "payment_status":    "fldFhG7A4isfjXvmg",
+    "payment_date":      "fldAMow8hzbTSQgiv",
+    "finance_notes":     "fldTvKPwWkkQ7t8wu",
+    "partnership_notes": "fldgQukcyvBdAjQ4b",
+}
 
 
 @st.cache_resource(show_spinner=False)
@@ -134,6 +159,27 @@ def get_tables():
         "deadlines": base.table(DEADLINES_TABLE_ID),
         "progress":  base.table(PROGRESS_TABLE_ID),
     }
+
+
+@st.cache_resource(show_spinner=False)
+def get_referral_table():
+    return get_airtable_api().base(BASE_ID).table(REFERRAL_TABLE_ID)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_partner_record_id(email):
+    try:
+        safe = email.strip().lower().replace("'", "\\'")
+        records = get_partner_table().all(
+            formula=f"LOWER({{Stacker log-in Email}}) = '{safe}'",
+            fields=["Stacker log-in Email"],
+            max_records=1,
+        )
+        if records:
+            return records[0]["id"]
+    except Exception:
+        pass
+    return None
 
 
 # ──────────────────────────────────────────────
@@ -626,6 +672,77 @@ def get_meeting_notes_for_student(student_name):
     except Exception as e:
         st.error(f"Error fetching meeting notes: {e}")
         return []
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_cohort_name(record_id):
+    try:
+        record = get_airtable_api().base(BASE_ID).table(COHORT_TABLE_ID).get(record_id)
+        fields = record["fields"]
+        # Try common primary field names, then fall back to first string value
+        for key in ("Name", "Cohort Name", "Cohort", "cohort"):
+            if fields.get(key):
+                return str(fields[key])
+        for val in fields.values():
+            if isinstance(val, str) and val.strip():
+                return val
+    except Exception:
+        pass
+    return ""
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_program_type_name(record_id):
+    try:
+        record = get_airtable_api().base(BASE_ID).table(PROGRAM_TYPE_TABLE_ID).get(record_id)
+        return record["fields"].get("Name", "")
+    except Exception:
+        return ""
+
+
+def _build_referral(record):
+    f = record["fields"]
+    ids = REFERRAL_FIELD_IDS
+
+    def _g(key):
+        return f.get(ids[key])
+
+    return {
+        "id":                record["id"],
+        "name":              clean_field(_g("name")),
+        "cohort":            get_cohort_name(_unwrap_val(_g("cohort")) or "") or "",
+        "admission":         clean_field(_g("admission")),
+        "program_type":      get_program_type_name(_unwrap_val(_g("program_type")) or "") or "",
+        "discount":          _g("discount"),
+        "original_tuition":  _g("original_tuition"),
+        "final_tuition":     _g("final_tuition"),
+        "net_paid":          _g("net_paid"),
+        "payment_method":    clean_field(_g("payment_method")),
+        "net_received":      _g("net_received"),
+        "commission_pct":    _g("commission_pct"),
+        "commission_amount": _g("commission_amount"),
+        "payment_status":    clean_field(_g("payment_status")),
+        "payment_date":      unwrap(_g("payment_date") or ""),
+        "finance_notes":     clean_field(_g("finance_notes")),
+        "partnership_notes": clean_field(_g("partnership_notes")),
+    }
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def get_referrals_for_partner(partner_email):
+    partner_record_id = get_partner_record_id(partner_email)
+    if not partner_record_id:
+        return {"error": f"No partner record found for {partner_email}"}
+    try:
+        formula = f"FIND('{partner_record_id}', ARRAYJOIN({{{REFERRAL_PARTNER_ID_FIELD}}}, ','))"
+        records = get_referral_table().all(
+            formula=formula,
+            fields=list(REFERRAL_FIELD_IDS.values()),
+            use_field_ids=True,
+        )
+        return [_build_referral(r) for r in records]
+    except Exception as e:
+        return {"error": f"Referral query failed: {e}"}
 
 
 # ──────────────────────────────────────────────
@@ -1261,6 +1378,313 @@ def show_meeting_summary(student):
                 st.markdown(note["notes"] or "No notes recorded.")
 
 
+def _unwrap_val(val):
+    """Unwrap a single-element list returned by Airtable lookup fields."""
+    if isinstance(val, list):
+        return val[0] if val else None
+    return val
+
+
+def _fmt_currency(val):
+    val = _unwrap_val(val)
+    if val is None or val == "":
+        return "—"
+    try:
+        v = float(val)
+        return f"${v:,.2f}"
+    except (ValueError, TypeError):
+        return str(val) if val else "—"
+
+
+def _fmt_pct(val):
+    val = _unwrap_val(val)
+    if val is None or val == "":
+        return "—"
+    if isinstance(val, str):
+        return val if val else "—"
+    try:
+        v = float(val)
+        # Airtable percent fields store as decimal (0.15 = 15%)
+        if 0 < v <= 1:
+            return f"{v * 100:.1f}%"
+        return f"{v:.1f}%"
+    except (ValueError, TypeError):
+        return "—"
+
+
+def _safe_float(val):
+    val = _unwrap_val(val)
+    try:
+        return float(val) if val is not None else 0.0
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def show_referral_tracker():
+    with st.spinner("Loading referral data..."):
+        referrals = get_referrals_for_partner(st.session_state.partner_email)
+
+    st.markdown("### Referral Tracker")
+    st.markdown("""
+    <div style="background:#F8F9FA;border-left:4px solid #BE1E2D;border-radius:6px;
+                padding:0.85rem 1rem;margin-bottom:1.25rem;color:#475569;font-size:0.92rem;line-height:1.55;">
+        Students your organisation has referred to Lumiere, along with their tuition details,
+        commission rate, and referral payment status.
+    </div>
+    """, unsafe_allow_html=True)
+
+    if isinstance(referrals, dict) and "error" in referrals:
+        st.error(referrals["error"])
+        return
+
+    if not referrals:
+        st.info("No referral records found for your account.")
+        return
+
+    # ── Summary metrics ───────────────────────────────────────────────────────
+    paid_list    = [r for r in referrals if r["payment_status"].strip().lower() == "paid"]
+    pending_list = [r for r in referrals if r["payment_status"].strip().lower() != "paid"]
+
+    total_commission   = sum(_safe_float(r["commission_amount"]) for r in referrals)
+    paid_commission    = sum(_safe_float(r["commission_amount"]) for r in paid_list)
+    pending_commission = sum(_safe_float(r["commission_amount"]) for r in pending_list)
+
+    pct_values = list(set(_fmt_pct(r["commission_pct"]) for r in referrals if r["commission_pct"] not in (None, "")))
+    commission_pct_display = pct_values[0] if len(pct_values) == 1 else ("Varies" if pct_values else "—")
+
+    def _metric_card(label, value, value_color="#1E293B"):
+        return (
+            f'<div style="background:white;border-radius:10px;padding:1.1rem 1.4rem;'
+            f'box-shadow:0 1px 4px rgba(0,0,0,0.07);border:1px solid #E2E8F0;">'
+            f'<div style="font-size:0.68rem;font-weight:700;color:#94A3B8;text-transform:uppercase;'
+            f'letter-spacing:0.07em;margin-bottom:0.5rem;">{label}</div>'
+            f'<div style="font-size:1.6rem;font-weight:700;color:{value_color};">{value}</div>'
+            f'</div>'
+        )
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown(_metric_card("Total Referrals", str(len(referrals))), unsafe_allow_html=True)
+    with c2:
+        st.markdown(_metric_card("Paid", str(len(paid_list)), "#16A34A"), unsafe_allow_html=True)
+    with c3:
+        st.markdown(_metric_card("Total Commission", _fmt_currency(total_commission), "#BE1E2D"), unsafe_allow_html=True)
+    with c4:
+        st.markdown(_metric_card("Commission Rate", commission_pct_display), unsafe_allow_html=True)
+
+    st.markdown("<div style='margin-top:1.5rem;'></div>", unsafe_allow_html=True)
+
+    # ── How commissions are calculated ────────────────────────────────────────
+    st.markdown(
+        f'<div style="background:white;border:1px solid #E2E8F0;border-radius:10px;'
+        f'padding:1rem 1.25rem;margin-bottom:1.25rem;">'
+        f'<div style="font-size:0.88rem;font-weight:700;color:#1E293B;margin-bottom:0.5rem;">'
+        f'How commissions are calculated</div>'
+        f'<div style="font-size:0.83rem;color:#475569;line-height:1.7;margin-bottom:0.25rem;">'
+        f'<strong style="color:#1E293B;">Net Amount Received</strong> — The final tuition amount after deducting a '
+        f'<strong style="color:#1E293B;">6.5% corporate tax</strong> and a payment processing fee of '
+        f'<strong style="color:#1E293B;">3.53% (Stripe)</strong> or <strong style="color:#1E293B;">4.41% (PayPal)</strong>, '
+        f'depending on the payment method used.</div>'
+        f'<div style="font-size:0.83rem;color:#475569;line-height:1.7;">'
+        f'<strong style="color:#1E293B;">Calculated Commission</strong> — Net Amount Received × your commission rate '
+        f'({commission_pct_display}). Commissions are paid once full tuition has been received and verified by our finance team.'
+        f'</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    # Tooltip CSS (injected once)
+    st.markdown("""
+    <style>
+    .ref-tt { position:relative; display:inline-flex; align-items:center; cursor:help; }
+    .ref-tt .ref-icon {
+        width:13px; height:13px; border-radius:50%; background:#CBD5E1; color:#64748B;
+        font-size:8px; font-weight:700; display:inline-flex; align-items:center;
+        justify-content:center; margin-left:4px; flex-shrink:0; font-style:normal;
+    }
+    .ref-tt .ref-tip {
+        visibility:hidden; opacity:0; transition:opacity 0.15s;
+        background:#1E293B; color:white; font-size:0.75rem; font-weight:400;
+        line-height:1.5; border-radius:7px; padding:7px 10px;
+        position:absolute; bottom:calc(100% + 6px); left:0;
+        width:240px; z-index:9999; pointer-events:none;
+        box-shadow:0 4px 12px rgba(0,0,0,0.2);
+    }
+    .ref-tt:hover .ref-tip { visibility:visible; opacity:1; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ── Filters ───────────────────────────────────────────────────────────────
+    f1, f2, f3 = st.columns([2, 2, 1.5])
+    with f1:
+        names = sorted(set(r["name"] for r in referrals if r["name"]))
+        sel_name = st.selectbox("Search student", ["All students"] + names, key="ref_filter_name")
+    with f2:
+        cohorts = sorted(set(r["cohort"] for r in referrals if r["cohort"]))
+        sel_cohort = st.selectbox("Filter by cohort", ["All cohorts"] + cohorts, key="ref_filter_cohort")
+    with f3:
+        sel_status = st.selectbox("Payment status", ["All", "Paid", "Pending"], key="ref_filter_status")
+
+    filtered = [
+        r for r in referrals
+        if (sel_name == "All students" or r["name"] == sel_name)
+        and (sel_cohort == "All cohorts" or r["cohort"] == sel_cohort)
+        and (
+            sel_status == "All"
+            or (sel_status == "Paid"    and r["payment_status"].strip().lower() == "paid")
+            or (sel_status == "Pending" and r["payment_status"].strip().lower() != "paid")
+        )
+    ]
+
+    if not filtered:
+        st.info("No records match the current filters.")
+        return
+
+    # ── Cards ─────────────────────────────────────────────────────────────────
+    def _status_badge(status):
+        s = (status or "").strip()
+        if s.lower() == "paid":
+            return (
+                '<span style="background:#DCFCE7;color:#166534;padding:0.2rem 0.65rem;'
+                'border-radius:20px;font-size:0.72rem;font-weight:600;white-space:nowrap;">✓ Paid</span>'
+            )
+        elif s:
+            return (
+                f'<span style="background:#FEF3C7;color:#92400E;padding:0.2rem 0.65rem;'
+                f'border-radius:20px;font-size:0.72rem;font-weight:600;white-space:nowrap;">⏳ {s}</span>'
+            )
+        return '<span style="color:#94A3B8;font-size:0.8rem;">—</span>'
+
+    def _pill(text, bg="#F1F5F9", color="#475569"):
+        return (
+            f'<span style="background:{bg};color:{color};padding:0.18rem 0.6rem;'
+            f'border-radius:20px;font-size:0.72rem;font-weight:500;white-space:nowrap;'
+            f'margin-right:0.35rem;display:inline-block;">{text}</span>'
+        )
+
+    def _tt(label, tip):
+        return (
+            f'<span class="ref-tt">{label}'
+            f'<i class="ref-icon">i</i>'
+            f'<span class="ref-tip">{tip}</span>'
+            f'</span>'
+        )
+
+    def _field_block(label, value, bold=False):
+        val_style = (
+            'font-size:0.95rem;font-weight:700;color:#1E293B;'
+            if bold else
+            'font-size:0.92rem;font-weight:500;color:#374151;'
+        )
+        return (
+            f'<div style="display:flex;flex-direction:column;gap:0.15rem;">'
+            f'<div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;'
+            f'letter-spacing:0.06em;color:#94A3B8;">{label}</div>'
+            f'<div style="{val_style}">{value}</div>'
+            f'</div>'
+        )
+
+    TIP_ORIG = "The full tuition amount before any scholarship or discount is applied."
+    TIP_FINAL = "The tuition amount after any scholarship or discount has been deducted."
+    TIP_NET_PAID = "The actual amount received from the student after any refunds."
+    TIP_NET_RECV = "Net Amount Paid minus a 6.5% corporate tax and a payment processing fee (3.53% Stripe / 4.41% PayPal)."
+    TIP_COMMISSION = "Your referral commission calculated by applying the commission % on the Net Amount Received (After Tax & Transaction Fees)."
+
+    cards_html = ""
+    for r in filtered:
+        status = (r["payment_status"] or "").strip()
+        payment_date = format_date(r["payment_date"]) if r["payment_date"] else "—"
+        commission_val = _fmt_currency(r["commission_amount"])
+        discount_val = _safe_float(r["discount"])
+
+        # Pill tags
+        pills = ""
+        if r["cohort"]:
+            pills += _pill(r["cohort"])
+        if r["program_type"]:
+            pills += _pill(r["program_type"], "#EEF2FF", "#4338CA")
+        if r["admission"]:
+            adm_bg = "#DCFCE7" if "accept" in (r["admission"] or "").lower() else "#F1F5F9"
+            adm_col = "#166534" if "accept" in (r["admission"] or "").lower() else "#475569"
+            pills += _pill(r["admission"], adm_bg, adm_col)
+
+        # Header row: name + pills left, status + commission + date right
+        header_row = (
+            f'<div style="display:flex;align-items:flex-start;justify-content:space-between;'
+            f'gap:1rem;margin-bottom:0.85rem;">'
+            f'<div>'
+            f'<div style="font-size:1.05rem;font-weight:700;color:#1E293B;margin-bottom:0.35rem;">'
+            f'{r["name"] or "—"}</div>'
+            f'<div>{pills}</div>'
+            f'</div>'
+            f'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.3rem;flex-shrink:0;">'
+            f'{_status_badge(status)}'
+            f'<div style="font-size:1.1rem;font-weight:700;color:#BE1E2D;">{commission_val}</div>'
+            f'<div style="font-size:0.75rem;color:#94A3B8;">Payment: {payment_date}</div>'
+            f'</div>'
+            f'</div>'
+        )
+
+        # Main 4-column grid
+        grid = (
+            f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;'
+            f'padding:0.85rem;background:#F8FAFC;border-radius:8px;margin-bottom:0.6rem;">'
+            + _field_block(_tt("Original Tuition Amount", TIP_ORIG), _fmt_currency(r["original_tuition"]))
+            + _field_block(_tt("Final Tuition Amount After Discount", TIP_FINAL), _fmt_currency(r["final_tuition"]))
+            + _field_block(_tt("Net Amount Received After Tax &amp; Transaction Fees", TIP_NET_RECV), _fmt_currency(r["net_received"]), bold=True)
+            + _field_block("Payment Method Used", r["payment_method"] or "—")
+            + f'</div>'
+        )
+
+        # Secondary row: Net Amount Paid + Discount (always shown)
+        sec_items = _field_block(_tt("Net Amount Paid", TIP_NET_PAID), _fmt_currency(r["net_paid"]))
+        if discount_val and discount_val != 0:
+            sec_items += _field_block("Discount Applied", _fmt_currency(r["discount"]))
+        sec_items += _field_block(_tt("Calculated Commission Amount", TIP_COMMISSION), commission_val, bold=True)
+
+        secondary = (
+            f'<div style="display:flex;gap:2.5rem;padding:0 0.25rem 0.5rem;">'
+            + sec_items
+            + f'</div>'
+        )
+
+        # Notes row
+        notes_html = ""
+        fn = (r["finance_notes"] or "").strip()
+        pn = (r["partnership_notes"] or "").strip()
+        if fn or pn:
+            note_parts = ""
+            if fn:
+                note_parts += (
+                    f'<div style="flex:1;">'
+                    f'<div style="font-size:0.68rem;font-weight:600;text-transform:uppercase;'
+                    f'letter-spacing:0.06em;color:#94A3B8;margin-bottom:0.2rem;">Finance Notes</div>'
+                    f'<div style="font-size:0.8rem;color:#475569;">{fn}</div></div>'
+                )
+            if pn:
+                note_parts += (
+                    f'<div style="flex:1;">'
+                    f'<div style="font-size:0.68rem;font-weight:600;text-transform:uppercase;'
+                    f'letter-spacing:0.06em;color:#94A3B8;margin-bottom:0.2rem;">Partnership Notes</div>'
+                    f'<div style="font-size:0.8rem;color:#475569;">{pn}</div></div>'
+                )
+            notes_html = (
+                f'<div style="display:flex;gap:1.5rem;margin-top:0.5rem;padding-top:0.6rem;'
+                f'border-top:1px solid #E2E8F0;">'
+                + note_parts
+                + f'</div>'
+            )
+
+        cards_html += (
+            f'<div style="background:white;border:1px solid #E2E8F0;border-radius:12px;'
+            f'padding:1.1rem 1.25rem;margin-bottom:0.85rem;'
+            f'box-shadow:0 1px 4px rgba(0,0,0,0.05);">'
+            + header_row + grid + secondary + notes_html
+            + f'</div>'
+        )
+
+    st.markdown(cards_html, unsafe_allow_html=True)
+
+
 # ──────────────────────────────────────────────
 # Student profile (3 tabs)
 # ──────────────────────────────────────────────
@@ -1487,6 +1911,7 @@ def show_dashboard():
         nav_options = [
             f"Onboarding Tracker  ({len(onboarding)})",
             f"Program Tracker  ({len(in_program)})",
+            "Referral Tracker",
         ]
         view = st.radio("Navigation", nav_options, label_visibility="collapsed")
 
@@ -1588,7 +2013,9 @@ def show_dashboard():
             unsafe_allow_html=True
         )
 
-    if "Onboarding" in view:
+    if "Referral" in view:
+        show_referral_tracker()
+    elif "Onboarding" in view:
         render_poc_card()
         st.markdown("### Onboarding Tracker")
         st.markdown("""
