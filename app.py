@@ -1913,7 +1913,10 @@ def show_dashboard():
             f"Program Tracker  ({len(in_program)})",
             "Referral Tracker",
         ]
-        view = st.radio("Navigation", nav_options, label_visibility="collapsed")
+        def _clear_selected_student():
+            st.session_state.selected_student = None
+
+        view = st.radio("Navigation", nav_options, label_visibility="collapsed", on_change=_clear_selected_student)
 
         st.markdown("---")
         if st.button("Refresh Data"):
