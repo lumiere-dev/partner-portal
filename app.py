@@ -1462,14 +1462,10 @@ def show_referral_tracker():
             f'</div>'
         )
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2 = st.columns(2)
     with c1:
-        st.markdown(_metric_card("Total Referrals", str(len(referrals))), unsafe_allow_html=True)
-    with c2:
-        st.markdown(_metric_card("Paid", str(len(paid_list)), "#16A34A"), unsafe_allow_html=True)
-    with c3:
         st.markdown(_metric_card("Total Commission", _fmt_currency(total_commission), "#BE1E2D"), unsafe_allow_html=True)
-    with c4:
+    with c2:
         st.markdown(_metric_card("Commission Rate", commission_pct_display), unsafe_allow_html=True)
 
     st.markdown("<div style='margin-top:1.5rem;'></div>", unsafe_allow_html=True)
