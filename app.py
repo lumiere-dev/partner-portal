@@ -37,6 +37,9 @@ PROGRESS_TABLE_ID = "tblcLCcczpe2G8i1X"
 PARTNER_TABLE_ID  = "tbl2xFN6arJ8XhW7h"
 REFERRAL_TABLE_ID = "tbldyQSNWYdTGjZGm"
 
+BD_LOOKUP_BASE_ID  = "appL9DZMKT2AaOuLI"
+BD_LOOKUP_TABLE_ID = "tblTf5LD6gQNdDlXn"
+
 REFERRAL_PARTNER_EMAIL_FIELD = "fldbCOFBOLNAkMxPB"  # email field on partner table
 REFERRAL_PARTNER_ID_FIELD   = "fldM15JJzzBDYrWPB"  # partner record ID field on referral table
 COHORT_TABLE_ID             = "tblOUDtK8E5VIrQCb"
@@ -75,6 +78,8 @@ def get_partner_table():
 @st.cache_resource(show_spinner=False)
 def get_bd_poc_table():
     return get_airtable_api().base(BASE_ID).table("tbl22BErOHo0FLcgJ")
+
+
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -119,35 +124,128 @@ def get_partner_name(email):
     return ""
 
 
+def _unwrap_str(val):
+    if isinstance(val, list):
+        return val[0] if val and isinstance(val[0], str) else ""
+    return val or ""
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_partner_info(email):
+    _empty = {"bd_poc_name": "", "bd_poc_headshot_url": "", "bd_poc_calendly": "", "bd_poc_bio": "", "bd_poc_email": ""}
     try:
         safe = email.strip().lower().replace("'", "\\'")
-        records = get_partner_table().all(
+        partner_records = get_partner_table().all(
             formula=f"LOWER({{Stacker log-in Email}}) = '{safe}'",
-            fields=["BD POC (Linked)", "Headshot (from BD POC (Linked))", "BD POC Email"],
             max_records=1,
         )
-        if records:
-            f = records[0]["fields"]
-            headshot_url = ""
-            raw_headshot = f.get("Headshot (from BD POC (Linked))", [])
-            if isinstance(raw_headshot, list) and raw_headshot:
-                first = raw_headshot[0]
-                if isinstance(first, dict):
-                    headshot_url = first.get("url", "")
-            poc_name = ""
-            poc_email = ""
-            linked_ids = f.get("BD POC (Linked)", [])
-            if linked_ids:
-                poc_record = get_bd_poc_table().get(linked_ids[0])
-                poc_name = poc_record["fields"].get("Name", "")
-            poc_email_raw = f.get("BD POC Email", "")
-            poc_email = poc_email_raw[0] if isinstance(poc_email_raw, list) and poc_email_raw else (poc_email_raw or "")
-            return {"bd_poc_name": poc_name, "bd_poc_email": poc_email, "bd_poc_headshot_url": headshot_url}
-    except Exception:
-        pass
-    return {"bd_poc_name": "", "bd_poc_email": "", "bd_poc_headshot_url": ""}
+        if not partner_records:
+            return _empty
+        partner_record_id = partner_records[0]["id"]
+
+        bd_table = get_airtable_api().base(BD_LOOKUP_BASE_ID).table(BD_LOOKUP_TABLE_ID)
+        lookup_records = bd_table.all(
+            formula=f"{{Record ID}} = '{partner_record_id}'",
+            max_records=1,
+        )
+        if not lookup_records:
+            return _empty
+
+        f = lookup_records[0]["fields"]
+
+        # Name: linked record field returns record IDs; display name is the primary field value
+        name_raw = f.get("Lumiere BD POC (Linked)", [])
+        poc_name = ""
+        if isinstance(name_raw, list) and name_raw:
+            first = name_raw[0]
+            poc_name = first if isinstance(first, str) and not first.startswith("rec") else ""
+        elif isinstance(name_raw, str):
+            poc_name = name_raw
+
+        # Headshot — attachment field returns list of dicts with a "url" key
+        headshot_url = ""
+        raw_headshot = f.get("Headshot (from Lumiere BD POC (Linked))", [])
+        if isinstance(raw_headshot, list) and raw_headshot:
+            first = raw_headshot[0]
+            headshot_url = first.get("url", "") if isinstance(first, dict) else (first if isinstance(first, str) else "")
+
+        poc_calendly = _unwrap_str(f.get("Calendly Link_BD (from Lumiere BD POC (Linked))", ""))
+        poc_bio      = _unwrap_str(f.get("Facts about PM (from Lumiere BD POC (Linked))", ""))
+        poc_email    = _unwrap_str(f.get("Staff Email (from Lumiere BD POC (Linked))", ""))
+
+        return {
+            "bd_poc_name":         poc_name,
+            "bd_poc_headshot_url": headshot_url,
+            "bd_poc_calendly":     poc_calendly,
+            "bd_poc_bio":          poc_bio,
+            "bd_poc_email":        poc_email,
+        }
+    except Exception as e:
+        st.warning(f"BD POC lookup failed: {e}")
+    return _empty
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_bd_poc_details(email):
+    _empty = {"bd_poc_name": "", "bd_poc_headshot_url": "", "bd_poc_calendly": "", "bd_poc_bio": "", "bd_poc_email": ""}
+    try:
+        safe = email.strip().lower().replace("'", "\\'")
+        partner_records = get_partner_table().all(
+            formula=f"LOWER({{Stacker log-in Email}}) = '{safe}'",
+            max_records=1,
+        )
+        if not partner_records:
+            return _empty
+        source_record_id = _unwrap_str(partner_records[0]["fields"].get("Record ID (from source base)", ""))
+        if not source_record_id:
+            return _empty
+
+        bd_table = get_airtable_api().base(BD_LOOKUP_BASE_ID).table(BD_LOOKUP_TABLE_ID)
+        formula = f"{{Record ID}} = '{source_record_id}'"
+
+        # Fetch attachment + lookup fields in default format
+        lookup_records = bd_table.all(
+            formula=formula,
+            fields=[
+                "Staff Email (from Lumiere BD POC (Linked))",
+                "Headshot (from Lumiere BD POC (Linked))",
+                "Facts about PM (from Lumiere BD POC (Linked))",
+                "Calendly Link_BD (from Lumiere BD POC (Linked))",
+            ],
+            max_records=1,
+        )
+        if not lookup_records:
+            return _empty
+
+        # Linked record fields return IDs in default format; use cell_format="string" to get the display name
+        name_records = bd_table.all(
+            formula=formula,
+            fields=["Lumiere BD POC (Linked)"],
+            cell_format="string",
+            user_locale="en-us",
+            time_zone="America/New_York",
+            max_records=1,
+        )
+        poc_name = _unwrap_str(name_records[0]["fields"].get("Lumiere BD POC (Linked)", "")) if name_records else ""
+
+        f = lookup_records[0]["fields"]
+
+        headshot_url = ""
+        raw_headshot = f.get("Headshot (from Lumiere BD POC (Linked))", [])
+        if isinstance(raw_headshot, list) and raw_headshot:
+            first = raw_headshot[0]
+            headshot_url = first.get("url", "") if isinstance(first, dict) else (first if isinstance(first, str) else "")
+
+        return {
+            "bd_poc_name":         poc_name,
+            "bd_poc_headshot_url": headshot_url,
+            "bd_poc_calendly":     _unwrap_str(f.get("Calendly Link_BD (from Lumiere BD POC (Linked))", "")),
+            "bd_poc_bio":          _unwrap_str(f.get("Facts about PM (from Lumiere BD POC (Linked))", "")),
+            "bd_poc_email":        _unwrap_str(f.get("Staff Email (from Lumiere BD POC (Linked))", "")),
+        }
+    except Exception as e:
+        st.warning(f"BD POC lookup failed: {e}")
+    return _empty
 
 
 @st.cache_resource(show_spinner=False)
@@ -558,15 +656,26 @@ def _build_student(record):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def get_students_for_partner(partner_email):
-    tables = get_tables()
-    try:
+    def _call():
         safe = partner_email.lower().replace("'", "\\'")
         formula = f"FIND('{safe}', LOWER(ARRAYJOIN({{Stacker ID (Partner)}}, ',')))"
-        records = tables["students"].all(formula=formula)
-        return [_build_student(r) for r in records]
+        return get_tables()["students"].all(formula=formula)
+
+    try:
+        records = _call()
     except Exception as e:
-        st.error(f"Error fetching students: {e}")
-        return []
+        if "ConnectionReset" in str(e) or "Connection aborted" in str(e):
+            get_tables.clear()
+            get_airtable_api.clear()
+            try:
+                records = _call()
+            except Exception as e2:
+                st.error(f"Error fetching students: {e2}")
+                return []
+        else:
+            st.error(f"Error fetching students: {e}")
+            return []
+    return [_build_student(r) for r in records]
 
 
 def _is_upcoming_cohort(raw):
@@ -1435,8 +1544,8 @@ def show_referral_tracker():
     st.markdown("""
     <div style="background:#F8F9FA;border-left:4px solid #BE1E2D;border-radius:6px;
                 padding:0.85rem 1rem;margin-bottom:1.25rem;color:#475569;font-size:0.92rem;line-height:1.55;">
-        Students your organisation has referred to Lumiere, along with their tuition details,
-        commission rate, and referral payment status.
+        Students for which your organisation will receive a referral payment, along with their
+        tuition details, commission rate, and payment status.
     </div>
     """, unsafe_allow_html=True)
 
@@ -1960,14 +2069,16 @@ def show_dashboard():
             unsafe_allow_html=True
         )
 
-    info = get_partner_info(st.session_state.partner_email)
-    poc_name = info.get("bd_poc_name", "")
-    poc_email = info.get("bd_poc_email", "")
+    info = get_bd_poc_details(st.session_state.partner_email)
+    poc_name     = info.get("bd_poc_name", "")
     poc_headshot = info.get("bd_poc_headshot_url", "")
+    poc_calendly = info.get("bd_poc_calendly", "")
+    poc_bio      = info.get("bd_poc_bio", "")
+    poc_email    = info.get("bd_poc_email", "")
 
 
     def render_poc_card():
-        if not poc_name and not poc_email:
+        if not poc_name:
             st.markdown(
                 '<div style="background:#F0F9FF;border:1px solid #BAE6FD;border-radius:12px;'
                 'padding:1rem 1.5rem;margin-bottom:1.5rem;color:#0C4A6E;font-size:0.9rem;line-height:1.65;">'
@@ -1980,15 +2091,6 @@ def show_dashboard():
                 unsafe_allow_html=True,
             )
             return
-        headline = (
-            f"Hi, I'm {poc_name}, your Partnerships Manager at Lumiere Education."
-            if poc_name else "Hi, I'm your Partnerships Manager at Lumiere Education."
-        )
-        email_html = (
-            f'<a href="mailto:{poc_email}" style="font-size:0.83rem;color:#BE1E2D;'
-            f'font-weight:600;text-decoration:none;">{poc_email}</a>'
-            if poc_email else ""
-        )
         headshot_html = (
             f'<img src="{poc_headshot}" style="width:80px;height:80px;border-radius:50%;'
             f'object-fit:cover;border:3px solid rgba(255,255,255,0.3);flex-shrink:0;">'
@@ -1997,21 +2099,32 @@ def show_dashboard():
             'flex-shrink:0;display:flex;align-items:center;justify-content:center;'
             'font-size:2rem;color:white;">👤</div>'
         )
+        bio_html = (
+            f'<div style="font-size:0.83rem;color:rgba(255,255,255,0.82);line-height:1.55;margin-bottom:0.6rem;">'
+            f'{poc_bio}</div>'
+            if poc_bio else ""
+        )
+        actions_html = "".join(filter(None, [
+            f'<a href="mailto:{poc_email}" style="font-size:0.8rem;color:rgba(255,255,255,0.9);'
+            f'font-weight:600;text-decoration:none;">{poc_email}</a>' if poc_email else "",
+            f'<span style="color:rgba(255,255,255,0.3);margin:0 0.6rem;">·</span>' if poc_email and poc_calendly else "",
+            f'<a href="{poc_calendly}" target="_blank" style="font-size:0.8rem;color:white;font-weight:600;'
+            f'text-decoration:none;background:rgba(255,255,255,0.15);padding:0.25rem 0.85rem;'
+            f'border-radius:20px;border:1px solid rgba(255,255,255,0.35);">📅 Book a meeting</a>' if poc_calendly else "",
+        ]))
         st.markdown(
             f'<div style="background:linear-gradient(135deg,#BE1E2D 0%,#8B1520 100%);'
             f'border-radius:14px;padding:1.25rem 1.75rem;margin-bottom:1.5rem;'
             f'box-shadow:0 4px 16px rgba(190,30,45,0.25);'
             f'display:flex;align-items:center;gap:1.5rem;">'
             f'{headshot_html}'
-            f'<div style="flex:1;">'
-            f'<div style="font-size:0.68rem;font-weight:700;color:rgba(255,255,255,0.7);'
-            f'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.3rem;">Your Partnerships Manager</div>'
-            f'<div style="font-size:1.05rem;font-weight:700;color:white;line-height:1.35;margin-bottom:0.35rem;">'
-            f'{headline}</div>'
-            f'<div style="font-size:0.83rem;color:rgba(255,255,255,0.8);line-height:1.5;margin-bottom:0.35rem;">'
-            f'I\'m here to support your partnership with Lumiere. Reach out anytime with questions about your students or our programs.</div>'
-            f'<a href="mailto:{poc_email}" style="font-size:0.83rem;color:rgba(255,255,255,0.9);'
-            f'font-weight:600;text-decoration:none;">{poc_email}</a>'
+            f'<div style="flex:1;min-width:0;">'
+            f'<div style="font-size:0.68rem;font-weight:700;color:rgba(255,255,255,0.65);'
+            f'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.35rem;">Your Partnerships Manager</div>'
+            f'<div style="font-size:1.05rem;font-weight:700;color:white;line-height:1.35;margin-bottom:0.5rem;">'
+            f'Hi, I\'m {poc_name}, your Partnerships Manager at Lumiere!</div>'
+            f'{bio_html}'
+            f'<div style="display:flex;align-items:center;flex-wrap:wrap;">{actions_html}</div>'
             f'</div>'
             f'</div>',
             unsafe_allow_html=True
