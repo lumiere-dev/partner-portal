@@ -1347,7 +1347,14 @@ def show_meeting_summary(student):
     with col1:
         st.markdown("**📊 Meetings Completed**")
         if expected > 0:
-            st.progress(min(completed / expected, 1.0))
+            pct = min(completed / expected, 1.0)
+            bar_color = "#16A34A" if completed >= expected else "#3B82F6"
+            st.markdown(
+                f'<div style="background:#E2E8F0;border-radius:4px;height:8px;margin:0.4rem 0;">'
+                f'<div style="background:{bar_color};width:{pct*100:.1f}%;height:8px;border-radius:4px;"></div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
             st.caption(f"{completed} of {expected} completed")
         else:
             st.markdown("No meetings scheduled")
@@ -1808,10 +1815,8 @@ def _program_meetings_html(student):
 
     if pct >= 1.0:
         bar_color, label_color = "#16A34A", "#16A34A"
-    elif pct >= 0.5:
-        bar_color, label_color = "#F59E0B", "#92400E"
     else:
-        bar_color, label_color = "#BE1E2D", "#BE1E2D"
+        bar_color, label_color = "#3B82F6", "#1D4ED8"
 
     return (
         f'<div style="display:flex;align-items:center;gap:0.6rem;padding:0.2rem 0 0.35rem;">'
