@@ -280,6 +280,22 @@ def get_partner_record_id(email):
     return None
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_partner_commission_pct(email):
+    try:
+        safe = email.strip().lower().replace("'", "\\'")
+        records = get_partner_table().all(
+            formula=f"LOWER({{Stacker log-in Email}}) = '{safe}'",
+            fields=["Commission Given (%)"],
+            max_records=1,
+        )
+        if not records:
+            return None
+        return records[0]["fields"].get("Commission Given (%)")
+    except Exception:
+        return None
+
+
 # ──────────────────────────────────────────────
 # Magic link auth
 # ──────────────────────────────────────────────
@@ -2018,11 +2034,13 @@ def show_dashboard():
             st.warning("Preview Mode")
         st.markdown("---")
 
+        show_referral = bool(_safe_float(get_partner_commission_pct(partner_email)))
         nav_options = [
             f"Onboarding Tracker  ({len(onboarding)})",
             f"Program Tracker  ({len(in_program)})",
-            "Referral Tracker",
         ]
+        if show_referral:
+            nav_options.append("Referral Tracker")
         def _clear_selected_student():
             st.session_state.selected_student = None
 
