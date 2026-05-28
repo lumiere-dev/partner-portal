@@ -281,19 +281,32 @@ def get_partner_record_id(email):
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def get_partner_commission_pct(email):
+def partner_has_commission(email):
+    """Returns True if the partner has a non-zero Commission Given (%) value."""
     try:
         safe = email.strip().lower().replace("'", "\\'")
         records = get_partner_table().all(
             formula=f"LOWER({{Stacker log-in Email}}) = '{safe}'",
-            fields=["Commission Given (%)"],
             max_records=1,
         )
         if not records:
-            return None
-        return records[0]["fields"].get("Commission Given (%)")
+            return False
+        val = records[0]["fields"].get("Commission Given (%)")
+        if isinstance(val, list):
+            val = val[0] if val else None
+        if val is None or val == "":
+            return False
+        if isinstance(val, (int, float)):
+            return float(val) != 0
+        if isinstance(val, str):
+            cleaned = val.strip().rstrip("%").strip()
+            try:
+                return float(cleaned) != 0
+            except ValueError:
+                return bool(cleaned)
+        return bool(val)
     except Exception:
-        return None
+        return False
 
 
 # ──────────────────────────────────────────────
@@ -2034,7 +2047,7 @@ def show_dashboard():
             st.warning("Preview Mode")
         st.markdown("---")
 
-        show_referral = bool(_safe_float(get_partner_commission_pct(partner_email)))
+        show_referral = partner_has_commission(partner_email)
         nav_options = [
             f"Onboarding Tracker  ({len(onboarding)})",
             f"Program Tracker  ({len(in_program)})",
