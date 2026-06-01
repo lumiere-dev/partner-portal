@@ -1609,7 +1609,7 @@ def show_referral_tracker():
 
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown(_metric_card("Total Commission", _fmt_currency(total_commission), "#BE1E2D"), unsafe_allow_html=True)
+        st.markdown(_metric_card("Total Commission", _fmt_currency(total_commission), "#16A34A"), unsafe_allow_html=True)
     with c2:
         st.markdown(_metric_card("Commission Rate", commission_pct_display), unsafe_allow_html=True)
 
@@ -1759,7 +1759,7 @@ def show_referral_tracker():
             f'</div>'
             f'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.3rem;flex-shrink:0;">'
             f'{_status_badge(status)}'
-            f'<div style="font-size:1.1rem;font-weight:700;color:#BE1E2D;">{commission_val}</div>'
+            f'<div style="font-size:1.1rem;font-weight:700;color:#16A34A;">{commission_val}</div>'
             f'<div style="font-size:0.75rem;color:#94A3B8;">Payment: {payment_date}</div>'
             f'</div>'
             f'</div>'
