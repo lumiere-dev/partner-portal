@@ -1629,7 +1629,7 @@ def show_referral_tracker():
         f'<strong style="color:#1E293B;">3.53% (Stripe)</strong> or <strong style="color:#1E293B;">4.41% (PayPal)</strong>, '
         f'depending on the payment method, as well as a <strong style="color:#1E293B;">6.5% corporate tax</strong>.</div>'
         f'<div style="font-size:0.83rem;color:#475569;line-height:1.7;">'
-        f'<strong style="color:#1E293B;">Calculated Commission</strong> — Net Amount Received × your commission rate '
+        f'<strong style="color:#1E293B;">Calculated Commission</strong> — Net Amount Received After Tax &amp; Transaction Fees × your commission rate '
         f'({commission_pct_display}). Commissions are paid once full tuition has been received and verified by our finance team.'
         f'</div></div>',
         unsafe_allow_html=True,
@@ -1772,17 +1772,18 @@ def show_referral_tracker():
             f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;'
             f'padding:0.85rem;background:#F8FAFC;border-radius:8px;margin-bottom:0.6rem;">'
             + _field_block(_tt("Original Tuition Amount", TIP_ORIG), _fmt_currency(r["original_tuition"]))
+            + _field_block("Discount Applied", _fmt_currency(r["discount"]))
             + _field_block(_tt("Final Tuition Amount After Discount", TIP_FINAL), _fmt_currency(r["final_tuition"]))
-            + _field_block(_tt("Net Amount Received After Tax &amp; Transaction Fees", TIP_NET_RECV), _fmt_currency(r["net_received"]), bold=True)
-            + _field_block("Payment Method Used", r["payment_method"] or "—")
+            + _field_block(_tt("Net Amount Paid", TIP_NET_PAID), _fmt_currency(r["net_paid"]))
             + f'</div>'
         )
 
-        # Secondary row: Net Amount Paid + Discount (always shown)
-        sec_items = _field_block(_tt("Net Amount Paid", TIP_NET_PAID), _fmt_currency(r["net_paid"]))
-        if discount_val and discount_val != 0:
-            sec_items += _field_block("Discount Applied", _fmt_currency(r["discount"]))
-        sec_items += _field_block(_tt("Calculated Commission Amount", TIP_COMMISSION), commission_val, bold=True)
+        # Secondary row: Payment Method, Net Received, Commission
+        sec_items = (
+            _field_block("Payment Method Used", r["payment_method"] or "—")
+            + _field_block(_tt("Net Amount Received After Tax &amp; Transaction Fees", TIP_NET_RECV), _fmt_currency(r["net_received"]), bold=True)
+            + _field_block(_tt("Calculated Commission Amount", TIP_COMMISSION), commission_val, bold=True)
+        )
 
         secondary = (
             f'<div style="display:flex;gap:2.5rem;padding:0 0.25rem 0.5rem;">'
