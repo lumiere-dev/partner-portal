@@ -1573,6 +1573,8 @@ def show_referral_tracker():
     st.markdown("""
     <div style="background:#F8F9FA;border-left:4px solid #BE1E2D;border-radius:6px;
                 padding:0.85rem 1rem;margin-bottom:1.25rem;color:#475569;font-size:0.92rem;line-height:1.55;">
+        <div style="font-size:0.75rem;font-weight:700;color:#94A3B8;text-transform:uppercase;
+                    letter-spacing:0.06em;margin-bottom:0.35rem;">referral payment/commission</div>
         Students for which your organisation will receive a referral payment, along with their
         tuition details, commission rate, and payment status.
     </div>
@@ -1622,10 +1624,10 @@ def show_referral_tracker():
         f'<div style="font-size:0.88rem;font-weight:700;color:#1E293B;margin-bottom:0.5rem;">'
         f'How commissions are calculated</div>'
         f'<div style="font-size:0.83rem;color:#475569;line-height:1.7;margin-bottom:0.25rem;">'
-        f'<strong style="color:#1E293B;">Net Amount Received</strong> — The final tuition amount after deducting a '
-        f'<strong style="color:#1E293B;">6.5% corporate tax</strong> and a payment processing fee of '
+        f'<strong style="color:#1E293B;">Net Amount Received After Tax &amp; Transaction Fees</strong> — '
+        f'This is the amount after deducting a transaction fee of '
         f'<strong style="color:#1E293B;">3.53% (Stripe)</strong> or <strong style="color:#1E293B;">4.41% (PayPal)</strong>, '
-        f'depending on the payment method used.</div>'
+        f'depending on the payment method, as well as a <strong style="color:#1E293B;">6.5% corporate tax</strong>.</div>'
         f'<div style="font-size:0.83rem;color:#475569;line-height:1.7;">'
         f'<strong style="color:#1E293B;">Calculated Commission</strong> — Net Amount Received × your commission rate '
         f'({commission_pct_display}). Commissions are paid once full tuition has been received and verified by our finance team.'
