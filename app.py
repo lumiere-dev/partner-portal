@@ -58,10 +58,11 @@ REFERRAL_FIELD_IDS = {
     "net_received":      "fldUVHZb5tcpp0w9Y",
     "commission_pct":    "fldwCzoFuqfmpFAqA",
     "commission_amount": "fldc4XjmaEIXcobls",
-    "payment_status":    "fldFhG7A4isfjXvmg",
-    "payment_date":      "fldAMow8hzbTSQgiv",
-    "finance_notes":     "fldTvKPwWkkQ7t8wu",
-    "partnership_notes": "fldgQukcyvBdAjQ4b",
+    "payment_status":      "fldFhG7A4isfjXvmg",
+    "payment_date":        "fldAMow8hzbTSQgiv",
+    "payment_status_note": "fldYcNEnSczVp92JR",
+    "finance_notes":       "fldTvKPwWkkQ7t8wu",
+    "partnership_notes":   "fldgQukcyvBdAjQ4b",
 }
 
 
@@ -859,9 +860,10 @@ def _build_referral(record):
         "net_received":      _g("net_received"),
         "commission_pct":    _g("commission_pct"),
         "commission_amount": _g("commission_amount"),
-        "payment_status":    clean_field(_g("payment_status")),
-        "payment_date":      unwrap(_g("payment_date") or ""),
-        "finance_notes":     clean_field(_g("finance_notes")),
+        "payment_status":      clean_field(_g("payment_status")),
+        "payment_date":        unwrap(_g("payment_date") or ""),
+        "payment_status_note": clean_field(_g("payment_status_note")),
+        "finance_notes":       clean_field(_g("finance_notes")),
         "partnership_notes": clean_field(_g("partnership_notes")),
     }
 
@@ -1665,7 +1667,11 @@ def show_referral_tracker():
         cohorts = sorted(set(r["cohort"] for r in referrals if r["cohort"]))
         sel_cohort = st.selectbox("Filter by cohort", ["All cohorts"] + cohorts, key="ref_filter_cohort")
     with f3:
-        sel_status = st.selectbox("Payment status", ["All", "Paid", "Pending"], key="ref_filter_status")
+        sel_status = st.selectbox(
+            "Payment status",
+            ["All", "Paid", "To be Paid", "Pending", "Not to be Paid"],
+            key="ref_filter_status",
+        )
 
     filtered = [
         r for r in referrals
@@ -1673,8 +1679,7 @@ def show_referral_tracker():
         and (sel_cohort == "All cohorts" or r["cohort"] == sel_cohort)
         and (
             sel_status == "All"
-            or (sel_status == "Paid"    and r["payment_status"].strip().lower() == "paid")
-            or (sel_status == "Pending" and r["payment_status"].strip().lower() != "paid")
+            or r["payment_status"].strip().lower() == sel_status.lower()
         )
     ]
 
@@ -1685,17 +1690,24 @@ def show_referral_tracker():
     # ── Cards ─────────────────────────────────────────────────────────────────
     def _status_badge(status):
         s = (status or "").strip()
-        if s.lower() == "paid":
-            return (
-                '<span style="background:#DCFCE7;color:#166534;padding:0.2rem 0.65rem;'
-                'border-radius:20px;font-size:0.72rem;font-weight:600;white-space:nowrap;">✓ Paid</span>'
-            )
+        sl = s.lower()
+        if sl == "paid":
+            bg, col, icon = "#DCFCE7", "#166534", "✓"
+        elif sl == "to be paid":
+            bg, col, icon = "#DBEAFE", "#1E40AF", "📅"
+        elif sl == "pending":
+            bg, col, icon = "#FEF3C7", "#92400E", "⏳"
+        elif sl == "not to be paid":
+            bg, col, icon = "#FEE2E2", "#991B1B", "✕"
         elif s:
-            return (
-                f'<span style="background:#FEF3C7;color:#92400E;padding:0.2rem 0.65rem;'
-                f'border-radius:20px;font-size:0.72rem;font-weight:600;white-space:nowrap;">⏳ {s}</span>'
-            )
-        return '<span style="color:#94A3B8;font-size:0.8rem;">—</span>'
+            bg, col, icon = "#F1F5F9", "#475569", "·"
+        else:
+            return '<span style="color:#94A3B8;font-size:0.8rem;">—</span>'
+        return (
+            f'<span style="background:{bg};color:{col};padding:0.2rem 0.65rem;'
+            f'border-radius:20px;font-size:0.72rem;font-weight:600;white-space:nowrap;">'
+            f'{icon} {s}</span>'
+        )
 
     def _pill(text, bg="#F1F5F9", color="#475569"):
         return (
@@ -1795,22 +1807,32 @@ def show_referral_tracker():
         notes_html = ""
         fn = (r["finance_notes"] or "").strip()
         pn = (r["partnership_notes"] or "").strip()
-        if fn or pn:
-            note_parts = ""
-            if fn:
-                note_parts += (
-                    f'<div style="flex:1;">'
-                    f'<div style="font-size:0.68rem;font-weight:600;text-transform:uppercase;'
-                    f'letter-spacing:0.06em;color:#94A3B8;margin-bottom:0.2rem;">Finance Notes</div>'
-                    f'<div style="font-size:0.8rem;color:#475569;">{fn}</div></div>'
-                )
-            if pn:
-                note_parts += (
-                    f'<div style="flex:1;">'
-                    f'<div style="font-size:0.68rem;font-weight:600;text-transform:uppercase;'
-                    f'letter-spacing:0.06em;color:#94A3B8;margin-bottom:0.2rem;">Partnership Notes</div>'
-                    f'<div style="font-size:0.8rem;color:#475569;">{pn}</div></div>'
-                )
+        sn = (r.get("payment_status_note") or "").strip()
+        show_status_note = status.lower() in ("pending", "not to be paid") and sn
+
+        note_parts = ""
+        if show_status_note:
+            note_parts += (
+                f'<div style="flex:1;">'
+                f'<div style="font-size:0.68rem;font-weight:600;text-transform:uppercase;'
+                f'letter-spacing:0.06em;color:#94A3B8;margin-bottom:0.2rem;">Note</div>'
+                f'<div style="font-size:0.8rem;color:#475569;">{sn}</div></div>'
+            )
+        if fn:
+            note_parts += (
+                f'<div style="flex:1;">'
+                f'<div style="font-size:0.68rem;font-weight:600;text-transform:uppercase;'
+                f'letter-spacing:0.06em;color:#94A3B8;margin-bottom:0.2rem;">Finance Notes</div>'
+                f'<div style="font-size:0.8rem;color:#475569;">{fn}</div></div>'
+            )
+        if pn:
+            note_parts += (
+                f'<div style="flex:1;">'
+                f'<div style="font-size:0.68rem;font-weight:600;text-transform:uppercase;'
+                f'letter-spacing:0.06em;color:#94A3B8;margin-bottom:0.2rem;">Partnership Notes</div>'
+                f'<div style="font-size:0.8rem;color:#475569;">{pn}</div></div>'
+            )
+        if note_parts:
             notes_html = (
                 f'<div style="display:flex;gap:1.5rem;margin-top:0.5rem;padding-top:0.6rem;'
                 f'border-top:1px solid #E2E8F0;">'
