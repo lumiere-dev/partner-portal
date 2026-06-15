@@ -58,11 +58,10 @@ REFERRAL_FIELD_IDS = {
     "net_received":      "fldUVHZb5tcpp0w9Y",
     "commission_pct":    "fldwCzoFuqfmpFAqA",
     "commission_amount": "fldc4XjmaEIXcobls",
-    "payment_status":      "fldFhG7A4isfjXvmg",
-    "payment_date":        "fldAMow8hzbTSQgiv",
-    "payment_status_note": "fldYcNEnSczVp92JR",
-    "finance_notes":       "fldTvKPwWkkQ7t8wu",
-    "partnership_notes":   "fldgQukcyvBdAjQ4b",
+    "payment_status":    "fldFhG7A4isfjXvmg",
+    "payment_date":      "fldAMow8hzbTSQgiv",
+    "finance_notes":     "fldTvKPwWkkQ7t8wu",
+    "partnership_notes": "fldgQukcyvBdAjQ4b",
 }
 
 
@@ -860,10 +859,9 @@ def _build_referral(record):
         "net_received":      _g("net_received"),
         "commission_pct":    _g("commission_pct"),
         "commission_amount": _g("commission_amount"),
-        "payment_status":      clean_field(_g("payment_status")),
-        "payment_date":        unwrap(_g("payment_date") or ""),
-        "payment_status_note": clean_field(_g("payment_status_note")),
-        "finance_notes":       clean_field(_g("finance_notes")),
+        "payment_status":    clean_field(_g("payment_status")),
+        "payment_date":      unwrap(_g("payment_date") or ""),
+        "finance_notes":     clean_field(_g("finance_notes")),
         "partnership_notes": clean_field(_g("partnership_notes")),
     }
 
@@ -1807,17 +1805,8 @@ def show_referral_tracker():
         notes_html = ""
         fn = (r["finance_notes"] or "").strip()
         pn = (r["partnership_notes"] or "").strip()
-        sn = (r.get("payment_status_note") or "").strip()
-        show_status_note = status.lower() in ("pending", "not to be paid") and sn
 
         note_parts = ""
-        if show_status_note:
-            note_parts += (
-                f'<div style="flex:1;">'
-                f'<div style="font-size:0.68rem;font-weight:600;text-transform:uppercase;'
-                f'letter-spacing:0.06em;color:#94A3B8;margin-bottom:0.2rem;">Note</div>'
-                f'<div style="font-size:0.8rem;color:#475569;">{sn}</div></div>'
-            )
         if fn:
             note_parts += (
                 f'<div style="flex:1;">'
