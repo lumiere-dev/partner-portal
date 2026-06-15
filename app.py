@@ -57,7 +57,7 @@ REFERRAL_FIELD_IDS = {
     "payment_method":    "fldy65URdlOKQfssp",
     "net_received":      "fldUVHZb5tcpp0w9Y",
     "commission_pct":    "fldwCzoFuqfmpFAqA",
-    "commission_amount": "fldc4XjmaEIXcobls",
+    "commission_amount": "fld7pXPidqV1u2HnK",
     "payment_status":    "fldFhG7A4isfjXvmg",
     "payment_date":      "fldAMow8hzbTSQgiv",
     "finance_notes":     "fldTvKPwWkkQ7t8wu",
