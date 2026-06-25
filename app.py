@@ -1094,9 +1094,11 @@ def show_applicant_onboarding(student):
 
     is_white_label = bool((student.get("white_label") or "").strip())
 
+    interview_val = str(student.get("interview_invitation_sent", "") or "").strip().lower()
+    interview_not_required = interview_val == "not required"
     stages_done = [
         True,
-        str(student.get("interview_invitation_sent", "") or "").strip().lower() == "yes",
+        interview_val == "yes" or interview_not_required,
         True if is_white_label else str(student.get("deposit_paid", "") or "").strip().lower() == "yes",
         str(student.get("mentor_confirmation", "") or "").strip().lower() == "yes",
         True if is_white_label else str(student.get("full_tuition_paid", "") or "").strip().lower() == "yes",
@@ -1172,7 +1174,9 @@ def show_applicant_onboarding(student):
     )
 
     # ── Stage 2: Interview ────────────────────────────────────────────────────
-    if stages_done[1]:
+    if interview_not_required:
+        s2 = _pending("Not required.")
+    elif stages_done[1]:
         s2 = _grid(fb("Interview Date", format_date(student.get("interview_invitation_date"))), cols=1)
     else:
         s2 = _pending("Interview invitation not yet sent.")
@@ -1896,7 +1900,7 @@ def _onboarding_stage_html(student, large=False):
     is_wl = bool((student.get("white_label") or "").strip())
     stages = [
         ("Applied",      True),
-        ("Interview",    str(student.get("interview_invitation_sent", "") or "").strip().lower() == "yes"),
+        ("Interview",    str(student.get("interview_invitation_sent", "") or "").strip().lower() in ("yes", "not required")),
         ("Deposit",      True if is_wl else str(student.get("deposit_paid", "") or "").strip().lower() == "yes"),
         ("Mentor Match", str(student.get("mentor_confirmation", "") or "").strip().lower() == "yes"),
         ("Full Tuition", True if is_wl else str(student.get("full_tuition_paid", "") or "").strip().lower() == "yes"),
