@@ -720,10 +720,7 @@ def _is_upcoming_cohort(raw):
 
 def get_onboarding_students(partner_email):
     students = get_students_for_partner(partner_email)
-    return [
-        s for s in students
-        if not s["confirmed_launched"] and _is_upcoming_cohort(s.get("upcoming_cohort"))
-    ]
+    return [s for s in students if not s["confirmed_launched"]]
 
 
 def get_program_students(partner_email):
@@ -2189,7 +2186,7 @@ def show_dashboard():
             details, and mentor assignment progress.
         </div>
         """, unsafe_allow_html=True)
-        ob_col_search, ob_col_cohort = st.columns([2, 2])
+        ob_col_search, ob_col_cohort, ob_col_upcoming = st.columns([2, 2, 2])
         with ob_col_search:
             ob_names = sorted(set(s["name"].split("|")[0].strip() for s in onboarding))
             selected_ob = st.selectbox(
@@ -2202,10 +2199,14 @@ def show_dashboard():
                 "Filter by cohort", options=["All cohorts"] + ob_cohorts,
                 key="filter_ob_cohort",
             )
+        with ob_col_upcoming:
+            st.markdown("<div style='padding-top:28px'></div>", unsafe_allow_html=True)
+            only_upcoming = st.checkbox("Upcoming cohort only", key="filter_ob_upcoming")
         filtered_onboarding = [
             s for s in onboarding
             if (selected_ob == "All students" or s["name"].split("|")[0].strip() == selected_ob)
             and (selected_ob_cohort == "All cohorts" or s.get("cohort", "") == selected_ob_cohort)
+            and (not only_upcoming or _is_upcoming_cohort(s.get("upcoming_cohort")))
         ]
         render_student_list(filtered_onboarding, "Onboarding Tracker", show_pipeline=True)
     elif "Program" in view:
