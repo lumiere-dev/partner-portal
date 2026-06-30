@@ -563,6 +563,7 @@ def track_umami_login(email):
         (function() {{
             const fire = () => {{
                 if (window.parent && window.parent.umami) {{
+                    window.parent.umami.track();
                     window.parent.umami.identify({{ email: '{safe_email}' }});
                     window.parent.umami.track('login', {{ email: '{safe_email}' }});
                 }} else {{
