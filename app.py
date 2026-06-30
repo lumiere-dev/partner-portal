@@ -2,6 +2,7 @@ import os
 import base64
 import concurrent.futures
 import streamlit as st
+import streamlit.components.v1 as components
 from pyairtable import Api
 from datetime import datetime, timedelta, timezone
 import resend
@@ -524,9 +525,57 @@ for _key, _default in [
     ("is_preview", False),
     ("magic_link_sent", False),
     ("team_unlocked", False),
+    ("login_tracked", False),
 ]:
     if _key not in st.session_state:
         st.session_state[_key] = _default
+
+
+def _inject_umami():
+    """Load Umami into the parent frame (only called post-auth)."""
+    components.html(
+        """
+        <script>
+        (function() {
+            if (window.parent && !window.parent.__umami_loaded) {
+                window.parent.__umami_loaded = true;
+                const s = window.parent.document.createElement('script');
+                s.defer = true;
+                s.src = 'https://cloud.umami.is/script.js';
+                s.setAttribute('data-website-id', '4e48a4fa-cc54-4835-ada3-c242f4fec0ec');
+                s.setAttribute('data-auto-track', 'false');
+                window.parent.document.head.appendChild(s);
+            }
+        })();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
+
+def track_umami_login(email):
+    """Identify the user in Umami and fire a 'login' event in the parent frame."""
+    safe_email = (email or "").replace("'", "\\'")
+    components.html(
+        f"""
+        <script>
+        (function() {{
+            const fire = () => {{
+                if (window.parent && window.parent.umami) {{
+                    window.parent.umami.identify({{ email: '{safe_email}' }});
+                    window.parent.umami.track('login', {{ email: '{safe_email}' }});
+                }} else {{
+                    setTimeout(fire, 200);
+                }}
+            }};
+            fire();
+        }})();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
 
 cookie_manager = stx.CookieManager(key="partner_portal")
 
@@ -2276,4 +2325,8 @@ if not st.session_state.authenticated:
 else:
     if "token" in st.query_params:
         st.query_params.clear()
+    _inject_umami()
+    if not st.session_state.get("login_tracked"):
+        track_umami_login(st.session_state.partner_email)
+        st.session_state.login_tracked = True
     show_dashboard()
