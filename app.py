@@ -1,6 +1,7 @@
 import os
 import base64
 import concurrent.futures
+import requests
 import streamlit as st
 import streamlit.components.v1 as components
 from pyairtable import Api
@@ -66,9 +67,26 @@ REFERRAL_FIELD_IDS = {
 }
 
 
+class _TimeoutHTTPAdapter(requests.adapters.HTTPAdapter):
+    # pyairtable's Api(timeout=...) is stored but never applied to requests in
+    # the installed pyairtable version, so Airtable calls can hang forever on
+    # a stalled connection. Enforce a real socket-level timeout here instead.
+    def __init__(self, *args, timeout=15, **kwargs):
+        self._timeout = timeout
+        super().__init__(*args, **kwargs)
+
+    def send(self, *args, **kwargs):
+        kwargs.setdefault("timeout", self._timeout)
+        return super().send(*args, **kwargs)
+
+
 @st.cache_resource(show_spinner=False)
 def get_airtable_api():
-    return Api(get_secret("AIRTABLE_API_KEY"), timeout=15, retry_strategy=False)
+    api = Api(get_secret("AIRTABLE_API_KEY"), timeout=15, retry_strategy=False)
+    adapter = _TimeoutHTTPAdapter(timeout=15)
+    api.session.mount("https://", adapter)
+    api.session.mount("http://", adapter)
+    return api
 
 
 @st.cache_resource(show_spinner=False)
@@ -101,8 +119,11 @@ def _partner_exists(email):
             fields=["Stacker log-in Email"],
             max_records=1,
         )
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    try:
         records = executor.submit(_call).result(timeout=20)
+    finally:
+        executor.shutdown(wait=False)
     return bool(records)
 
 
@@ -116,8 +137,11 @@ def get_partner_name(email):
                 fields=["Partner Name"],
                 max_records=1,
             )
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        try:
             records = executor.submit(_call).result(timeout=20)
+        finally:
+            executor.shutdown(wait=False)
         if records:
             return records[0]["fields"].get("Partner Name", "")
     except Exception:
