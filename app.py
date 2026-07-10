@@ -427,7 +427,7 @@ STUDENT_FIELDS = {
     "mentor_outreach_date":     "OB: Mentor Outreach date (for automations)",
     "interview_notes":          "Interview Notes For The Mentor [OB]",
     "confirmed_launched":       "Student Confirmed & Launched",
-    "partner_id":               "Stacker ID (Partner)",
+    "partner_id":               "Partner Email ID (For Partner Portal Login)",
     "white_label":              "White Label or Partner Payment Program",
     "status_in_program":        "PM: Status in Program",
     "publication_marker":       "Publication Marker",
@@ -761,7 +761,7 @@ def _build_student(record):
 def get_students_for_partner(partner_email):
     def _call():
         safe = partner_email.lower().replace("'", "\\'")
-        formula = f"FIND('{safe}', LOWER(ARRAYJOIN({{Stacker ID (Partner)}}, ',')))"
+        formula = f"FIND('{safe}', LOWER(ARRAYJOIN({{Partner Email ID (For Partner Portal Login)}}, ',')))"
         return get_tables()["students"].all(formula=formula)
 
     try:
