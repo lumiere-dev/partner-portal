@@ -115,8 +115,8 @@ def _partner_exists(email):
     safe = email.strip().lower().replace("'", "\\'")
     def _call():
         return get_partner_table().all(
-            formula=f"LOWER({{Stacker log-in Email}}) = '{safe}'",
-            fields=["Stacker log-in Email"],
+            formula=f"LOWER({{Partner Portal Log-In Email}}) = '{safe}'",
+            fields=["Partner Portal Log-In Email"],
             max_records=1,
         )
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
@@ -133,7 +133,7 @@ def get_partner_name(email):
         safe = email.strip().lower().replace("'", "\\'")
         def _call():
             return get_partner_table().all(
-                formula=f"LOWER({{Stacker log-in Email}}) = '{safe}'",
+                formula=f"LOWER({{Partner Portal Log-In Email}}) = '{safe}'",
                 fields=["Partner Name"],
                 max_records=1,
             )
@@ -161,7 +161,7 @@ def get_partner_info(email):
     try:
         safe = email.strip().lower().replace("'", "\\'")
         partner_records = get_partner_table().all(
-            formula=f"LOWER({{Stacker log-in Email}}) = '{safe}'",
+            formula=f"LOWER({{Partner Portal Log-In Email}}) = '{safe}'",
             max_records=1,
         )
         if not partner_records:
@@ -216,7 +216,7 @@ def get_bd_poc_details(email):
     try:
         safe = email.strip().lower().replace("'", "\\'")
         partner_records = get_partner_table().all(
-            formula=f"LOWER({{Stacker log-in Email}}) = '{safe}'",
+            formula=f"LOWER({{Partner Portal Log-In Email}}) = '{safe}'",
             max_records=1,
         )
         if not partner_records:
@@ -294,8 +294,8 @@ def get_partner_record_id(email):
     try:
         safe = email.strip().lower().replace("'", "\\'")
         records = get_partner_table().all(
-            formula=f"LOWER({{Stacker log-in Email}}) = '{safe}'",
-            fields=["Stacker log-in Email"],
+            formula=f"LOWER({{Partner Portal Log-In Email}}) = '{safe}'",
+            fields=["Partner Portal Log-In Email"],
             max_records=1,
         )
         if records:
@@ -311,7 +311,7 @@ def partner_has_commission(email):
     try:
         safe = email.strip().lower().replace("'", "\\'")
         records = get_partner_table().all(
-            formula=f"LOWER({{Stacker log-in Email}}) = '{safe}'",
+            formula=f"LOWER({{Partner Portal Log-In Email}}) = '{safe}'",
             max_records=1,
         )
         if not records:
