@@ -273,6 +273,37 @@ def get_bd_poc_details(email):
     return _empty
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_partner_application_link(email):
+    try:
+        safe = email.strip().lower().replace("'", "\\'")
+        partner_records = get_partner_table().all(
+            formula=f"LOWER({{Partner Portal Log-In Email}}) = '{safe}'",
+            fields=["Record ID (from source base)"],
+            max_records=1,
+        )
+        if not partner_records:
+            return ""
+        source_record_id = _unwrap_str(partner_records[0]["fields"].get("Record ID (from source base)", ""))
+        if not source_record_id:
+            return ""
+
+        bd_table = get_airtable_api().base(BD_LOOKUP_BASE_ID).table(BD_LOOKUP_TABLE_ID)
+        lookup_records = bd_table.all(
+            formula=f"{{Record ID}} = '{source_record_id}'",
+            fields=["Referral Source Prefilled Application Link (Lumiere)", "White Label Partner"],
+            max_records=1,
+        )
+        if lookup_records:
+            lf = lookup_records[0]["fields"]
+            if _unwrap_str(lf.get("White Label Partner", "")) == "Yes":
+                return ""
+            return _unwrap_str(lf.get("Referral Source Prefilled Application Link (Lumiere)", ""))
+    except Exception:
+        pass
+    return ""
+
+
 @st.cache_resource(show_spinner=False)
 def get_tables():
     api = get_airtable_api()
@@ -907,6 +938,29 @@ def get_program_type_name(record_id):
         return record["fields"].get("Name", "")
     except Exception:
         return ""
+
+
+def render_application_link_banner(partner_email):
+    application_link = get_partner_application_link(partner_email)
+    if application_link:
+        st.markdown(f"""
+        <div style="background:#FFF5F5;border:1px solid #F5D0D3;border-radius:10px;
+                    padding:1rem 1.25rem;margin-bottom:1.25rem;display:flex;align-items:center;
+                    justify-content:space-between;gap:1.25rem;flex-wrap:wrap;">
+            <div style="flex:1;min-width:220px;">
+                <div style="font-weight:700;color:#1E293B;font-size:0.95rem;margin-bottom:0.2rem;">
+                    🔗 Want to refer another student?
+                </div>
+                <div style="color:#64748B;font-size:0.85rem;line-height:1.4;">
+                    Share this application link with them!
+                </div>
+            </div>
+            <a href="{application_link}" target="_blank" style="font-size:0.85rem;color:white;
+               font-weight:600;text-decoration:none;background:#BE1E2D;padding:0.55rem 1.25rem;
+               border-radius:20px;white-space:nowrap;box-shadow:0 2px 8px rgba(190,30,45,0.25);">
+               Open application link ↗</a>
+        </div>
+        """, unsafe_allow_html=True)
 
 
 def _build_referral(record):
@@ -2264,6 +2318,7 @@ def show_dashboard():
             details, and mentor assignment progress.
         </div>
         """, unsafe_allow_html=True)
+        render_application_link_banner(st.session_state.partner_email)
         ob_col_search, ob_col_cohort, ob_col_upcoming = st.columns([2, 2, 2])
         with ob_col_search:
             ob_names = sorted(set(s["name"].split("|")[0].strip() for s in onboarding))
@@ -2298,6 +2353,7 @@ def show_dashboard():
             from their mentor sessions.
         </div>
         """, unsafe_allow_html=True)
+        render_application_link_banner(st.session_state.partner_email)
         prog_col_search, prog_col_cohort, prog_col_status = st.columns([2, 2, 2])
         with prog_col_search:
             prog_names = sorted(set(s["name"].split("|")[0].strip() for s in in_program))
