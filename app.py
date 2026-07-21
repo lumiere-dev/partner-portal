@@ -444,6 +444,7 @@ STUDENT_FIELDS = {
     "mentor_confirmation":      "Mentor Confirmation",
     "mentor_university":        "University of PhD/Last Degree (text)",
     "participation_decision":   "Written Confirmation/Participation Decision",
+    "final_decision":           "Final Application Decision - Lumiere Side [OB]",
     "interview_invitation_sent":"Interview Invitation Sent [OB]",
     "interview_invitation_date":"Date of Interview Invite Sent [OB]",
     "deposit_paid":             "OB: Deposit Paid",
@@ -755,6 +756,7 @@ def _build_student(record):
         "mentor_confirmation":       clean_field(f.get(STUDENT_FIELDS["mentor_confirmation"], "")),
         "mentor_university":         clean_field(f.get(STUDENT_FIELDS["mentor_university"], "")),
         "participation_decision":    clean_field(f.get(STUDENT_FIELDS["participation_decision"], "")),
+        "final_decision":            clean_field(f.get(STUDENT_FIELDS["final_decision"], "")),
         "interview_invitation_sent": clean_field(f.get(STUDENT_FIELDS["interview_invitation_sent"], "")),
         "interview_invitation_date": unwrap(f.get(STUDENT_FIELDS["interview_invitation_date"], "")),
         "deposit_paid":              clean_field(f.get(STUDENT_FIELDS["deposit_paid"], "")),
@@ -1221,6 +1223,22 @@ def show_applicant_onboarding(student):
     mentor_prefix = "Mentor's" if mentor_confirmed else "Proposed mentor's"
 
     is_white_label = bool((student.get("white_label") or "").strip())
+
+    discontinued_label = _discontinued_label(student)
+    discontinued_detail = {
+        "Application Rejected": "this student's application was not offered a place in the program.",
+        "Did Not Move Forward": "this student decided not to proceed with the program after being offered a place.",
+        "Suspended": "this student is currently suspended from the program.",
+        "Withdrawn": "this student has withdrawn from the program.",
+    }.get(discontinued_label, "")
+
+    if discontinued_label:
+        st.markdown(
+            '<div style="background:rgba(239,68,68,0.1);border:1px solid #EF4444;border-radius:8px;'
+            f'padding:0.5rem 1rem;margin-bottom:0.75rem;font-size:0.85rem;color:#7F1D1D;">'
+            f'<strong>{discontinued_label}</strong> — {discontinued_detail}</div>',
+            unsafe_allow_html=True,
+        )
 
     interview_val = str(student.get("interview_invitation_sent", "") or "").strip().lower()
     interview_not_required = interview_val == "not required"
@@ -2110,6 +2128,21 @@ def _program_meetings_html(student):
     )
 
 
+def _discontinued_label(student):
+    """Short label if a student is no longer progressing (rejected, declined, or left the program)."""
+    final_decision = str(student.get("final_decision") or "").strip().lower()
+    participation_decision = str(student.get("participation_decision") or "").strip().lower()
+    status_in_program = str(student.get("status_in_program") or "").strip()
+
+    if final_decision == "rejected":
+        return "Application Rejected"
+    if participation_decision == "no":
+        return "Did Not Move Forward"
+    if status_in_program in ("Suspended", "Withdrawn"):
+        return status_in_program
+    return None
+
+
 def render_student_list(students, page_label, show_pipeline=False, show_meetings=False):
     if not students:
         st.info(f"No students in the {page_label} yet.")
@@ -2131,15 +2164,15 @@ def render_student_list(students, page_label, show_pipeline=False, show_meetings
     for s in sorted_students:
         tracker_value = s.get("name", "")
         mentor = s.get("mentor_name") or "Not yet assigned"
-        status_in_prog = s.get("status_in_program", "") or ""
+        discontinued_label = _discontinued_label(s)
 
         col_name, col_mentor, col_btn = st.columns([3.5, 2, 0.8])
         with col_name:
             st.markdown(f"**{tracker_value}**")
-            if status_in_prog in ("Suspended", "Withdrawn"):
+            if discontinued_label:
                 st.markdown(
                     f'<div style="font-size:0.75rem;color:#DC2626;margin-top:-0.3rem;margin-bottom:0.15rem;">'
-                    f'⚠️ {status_in_prog}</div>',
+                    f'⚠️ {discontinued_label}</div>',
                     unsafe_allow_html=True,
                 )
         with col_mentor:
