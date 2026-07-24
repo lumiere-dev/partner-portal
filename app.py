@@ -2173,7 +2173,7 @@ def render_student_list(students, page_label, show_pipeline=False, show_meetings
                 st.markdown(
                     '<div style="display:inline-flex;align-items:center;gap:0.35rem;'
                     'background:#FEF2F2;border:1px solid #FECACA;color:#B91C1C;'
-                    'font-size:0.72rem;font-weight:600;padding:0.15rem 0.6rem;'
+                    'font-size:0.85rem;font-weight:600;padding:0.2rem 0.7rem;'
                     'border-radius:999px;margin-top:0.1rem;margin-bottom:0.3rem;">'
                     f'⚠️ {discontinued_label}</div>',
                     unsafe_allow_html=True,
