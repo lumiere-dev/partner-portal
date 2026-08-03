@@ -399,6 +399,8 @@ def send_magic_link(email):
     resend.api_key = get_secret("RESEND_API_KEY")
     token = generate_magic_token(email)
     base_url = get_secret("APP_URL", "http://localhost:8503")
+    if not base_url.startswith(("http://", "https://")):
+        base_url = f"https://{base_url}"
     magic_link = f"{base_url}?token={token}"
     try:
         resend.Emails.send({
@@ -409,13 +411,21 @@ def send_magic_link(email):
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #BE1E2D;">Welcome to the Lumiere Partner Portal</h2>
                 <p>Click the button below to access your partner dashboard:</p>
-                <p style="margin: 30px 0;">
-                    <a href="{magic_link}"
-                       style="background: linear-gradient(135deg, #BE1E2D 0%, #8B1520 100%);
-                              color: white; padding: 12px 30px; text-decoration: none;
-                              border-radius: 6px; display: inline-block;">
-                        Access Partner Portal
-                    </a>
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 30px 0;">
+                    <tr>
+                        <td bgcolor="#BE1E2D" style="border-radius: 6px;">
+                            <a href="{magic_link}" target="_blank"
+                               style="background-color: #BE1E2D; color: #ffffff; padding: 12px 30px;
+                                      text-decoration: none; border-radius: 6px; display: block;
+                                      font-family: Arial, sans-serif;">
+                                Access Partner Portal
+                            </a>
+                        </td>
+                    </tr>
+                </table>
+                <p style="color: #64748B; font-size: 14px;">
+                    If the button above doesn't work, copy and paste this link into your browser:<br>
+                    <a href="{magic_link}" style="color: #BE1E2D; word-break: break-all;">{magic_link}</a>
                 </p>
                 <p style="color: #64748B; font-size: 14px;">
                     This link will expire in 1 hour.<br>
