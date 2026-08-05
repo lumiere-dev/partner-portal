@@ -64,6 +64,20 @@ REFERRAL_FIELD_IDS = {
     "payment_date":      "fldAMow8hzbTSQgiv",
     "finance_notes":     "fldTvKPwWkkQ7t8wu",
     "partnership_notes": "fldgQukcyvBdAjQ4b",
+    "student_link":      "fldOeaXK8ggWO9L5O",  # Link to Student Application & Tracker Table
+}
+
+# White-label students track invoicing on the Student table itself rather than
+# the Referral table's commission fields — Lumiere invoices the WL partner for
+# the program cost instead of paying them a referral commission.
+WL_STUDENT_FIELD_IDS = {
+    "white_label":               "fld0pIFpiFI7QwYO9",  # White Label or Partner Payment Program
+    "wl_program_cost":           "fldZyBeOQnec2brgx",  # FN: WL Program Cost
+    "wl_invoicing_status":       "fldsZ8Dv9jzsBDfPx",  # FN: WL Invoicing Status
+    "wl_invoice_payment_status": "fldsZnmTLx8N1G7lZ",  # FN: WL Invoice Payment Status
+    "wl_invoicing_note":         "fldU7Z9URDZU9l6fM",  # FN: WL Invoicing Note
+    "wl_invoice_payment_date":   "fldDmkXMgsSDskI5N",  # FN: WL Invoice Payment Date
+    "wl_invoice_number":         "fldeRhFhbwVUQe4YO",  # FN: WL Invoice Number
 }
 
 
@@ -1000,7 +1014,49 @@ def _build_referral(record):
         "payment_date":      unwrap(_g("payment_date") or ""),
         "finance_notes":     clean_field(_g("finance_notes")),
         "partnership_notes": clean_field(_g("partnership_notes")),
+        "student_id":        _unwrap_val(_g("student_link")) or "",
+        "is_white_label":            False,
+        "wl_program_cost":           None,
+        "wl_invoicing_status":       "",
+        "wl_invoice_payment_status": "",
+        "wl_invoicing_note":         "",
+        "wl_invoice_payment_date":   "",
+        "wl_invoice_number":        "",
     }
+
+
+def _attach_wl_fields(referrals):
+    """Fill in white-label invoicing fields (kept on the Student table, not
+    the Referral table) for any referral whose linked student is white-label."""
+    student_ids = sorted(set(r["student_id"] for r in referrals if r["student_id"]))
+    if not student_ids:
+        return
+    formula = "OR(" + ",".join(f"RECORD_ID()='{sid}'" for sid in student_ids) + ")"
+    try:
+        student_records = get_tables()["students"].all(
+            formula=formula,
+            fields=list(WL_STUDENT_FIELD_IDS.values()),
+            use_field_ids=True,
+        )
+    except Exception:
+        return
+
+    wl_by_id = {}
+    for rec in student_records:
+        f = rec["fields"]
+        wl_by_id[rec["id"]] = {key: f.get(fid) for key, fid in WL_STUDENT_FIELD_IDS.items()}
+
+    for r in referrals:
+        wl = wl_by_id.get(r["student_id"])
+        if not wl:
+            continue
+        r["is_white_label"]            = bool(clean_field(wl.get("white_label", "")).strip())
+        r["wl_program_cost"]           = wl.get("wl_program_cost")
+        r["wl_invoicing_status"]       = clean_field(wl.get("wl_invoicing_status", ""))
+        r["wl_invoice_payment_status"] = clean_field(wl.get("wl_invoice_payment_status", ""))
+        r["wl_invoicing_note"]         = clean_field(wl.get("wl_invoicing_note", ""))
+        r["wl_invoice_payment_date"]   = unwrap(wl.get("wl_invoice_payment_date") or "")
+        r["wl_invoice_number"]         = clean_field(wl.get("wl_invoice_number", ""))
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -1015,7 +1071,9 @@ def get_referrals_for_partner(partner_email):
             fields=list(REFERRAL_FIELD_IDS.values()),
             use_field_ids=True,
         )
-        return [_build_referral(r) for r in records]
+        referrals = [_build_referral(r) for r in records]
+        _attach_wl_fields(referrals)
+        return referrals
     except Exception as e:
         return {"error": f"Referral query failed: {e}"}
 
@@ -1901,10 +1959,7 @@ def show_referral_tracker():
 
     cards_html = ""
     for r in filtered:
-        status = (r["payment_status"] or "").strip()
-        payment_date = format_date(r["payment_date"]) if r["payment_date"] else "—"
-        commission_val = _fmt_currency(r["commission_amount"])
-        discount_val = _safe_float(r["discount"])
+        is_wl = r["is_white_label"]
 
         # Pill tags
         pills = ""
@@ -1916,8 +1971,26 @@ def show_referral_tracker():
             adm_bg = "#DCFCE7" if "accept" in (r["admission"] or "").lower() else "#F1F5F9"
             adm_col = "#166534" if "accept" in (r["admission"] or "").lower() else "#475569"
             pills += _pill(r["admission"], adm_bg, adm_col)
+        if is_wl:
+            pills += _pill("White Label", "#EDE9FE", "#5B21B6")
 
-        # Header row: name + pills left, status + commission + date right
+        # White-label students: Lumiere invoices the partner for the program cost
+        # instead of paying them a referral commission, so the header's status/
+        # amount/date reflect invoicing fields (from the Student table) instead.
+        if is_wl:
+            status = r["wl_invoice_payment_status"] or ""
+            top_amount = _fmt_currency(r["wl_program_cost"])
+            top_amount_color = "#1E293B"
+            date_label = "Invoice Payment"
+            date_val = format_date(r["wl_invoice_payment_date"]) if r["wl_invoice_payment_date"] else "—"
+        else:
+            status = (r["payment_status"] or "").strip()
+            top_amount = _fmt_currency(r["commission_amount"])
+            top_amount_color = "#16A34A"
+            date_label = "Payment"
+            date_val = format_date(r["payment_date"]) if r["payment_date"] else "—"
+
+        # Header row: name + pills left, status + amount + date right
         header_row = (
             f'<div style="display:flex;align-items:flex-start;justify-content:space-between;'
             f'gap:1rem;margin-bottom:0.85rem;">'
@@ -1928,42 +2001,66 @@ def show_referral_tracker():
             f'</div>'
             f'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.3rem;flex-shrink:0;">'
             f'{_status_badge(status)}'
-            f'<div style="font-size:1.1rem;font-weight:700;color:#16A34A;">{commission_val}</div>'
-            f'<div style="font-size:0.75rem;color:#94A3B8;">Payment: {payment_date}</div>'
+            f'<div style="font-size:1.1rem;font-weight:700;color:{top_amount_color};">{top_amount}</div>'
+            f'<div style="font-size:0.75rem;color:#94A3B8;">{date_label}: {date_val}</div>'
             f'</div>'
             f'</div>'
         )
 
-        # Main 4-column grid
-        grid = (
-            f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;'
-            f'padding:0.85rem;background:#F8FAFC;border-radius:8px;margin-bottom:0.6rem;">'
-            + _field_block(_tt("Original Tuition Amount", TIP_ORIG), _fmt_currency(r["original_tuition"]))
-            + _field_block("Discount Applied", _fmt_currency(r["discount"]))
-            + _field_block(_tt("Final Tuition Amount After Discount", TIP_FINAL), _fmt_currency(r["final_tuition"]))
-            + _field_block(_tt("Net Amount Paid", TIP_NET_PAID), _fmt_currency(r["net_paid"]))
-            + f'</div>'
-        )
+        if is_wl:
+            # Program Cost / Invoicing Status / Invoice Payment Status / Invoice Number
+            grid = (
+                f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;'
+                f'padding:0.85rem;background:#F8FAFC;border-radius:8px;margin-bottom:0.6rem;">'
+                + _field_block("Program Cost", _fmt_currency(r["wl_program_cost"]))
+                + _field_block("Invoicing Status", r["wl_invoicing_status"] or "—")
+                + _field_block("Invoice Payment Status", r["wl_invoice_payment_status"] or "—", bold=True)
+                + _field_block("Invoice Number", r["wl_invoice_number"] or "—")
+                + f'</div>'
+            )
+            secondary = ""
+        else:
+            discount_val = _safe_float(r["discount"])
+            commission_val = top_amount
 
-        # Secondary row: Payment Method, Net Received, Commission
-        sec_items = (
-            _field_block("Payment Method Used", r["payment_method"] or "—")
-            + _field_block(_tt("Net Amount Received After Tax &amp; Transaction Fees", TIP_NET_RECV), _fmt_currency(r["net_received"]), bold=True)
-            + _field_block(_tt("Calculated Commission Amount", TIP_COMMISSION), commission_val, bold=True)
-        )
+            # Main 4-column grid
+            grid = (
+                f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;'
+                f'padding:0.85rem;background:#F8FAFC;border-radius:8px;margin-bottom:0.6rem;">'
+                + _field_block(_tt("Original Tuition Amount", TIP_ORIG), _fmt_currency(r["original_tuition"]))
+                + _field_block("Discount Applied", _fmt_currency(r["discount"]))
+                + _field_block(_tt("Final Tuition Amount After Discount", TIP_FINAL), _fmt_currency(r["final_tuition"]))
+                + _field_block(_tt("Net Amount Paid", TIP_NET_PAID), _fmt_currency(r["net_paid"]))
+                + f'</div>'
+            )
 
-        secondary = (
-            f'<div style="display:flex;gap:2.5rem;padding:0 0.25rem 0.5rem;">'
-            + sec_items
-            + f'</div>'
-        )
+            # Secondary row: Payment Method, Net Received, Commission
+            sec_items = (
+                _field_block("Payment Method Used", r["payment_method"] or "—")
+                + _field_block(_tt("Net Amount Received After Tax &amp; Transaction Fees", TIP_NET_RECV), _fmt_currency(r["net_received"]), bold=True)
+                + _field_block(_tt("Calculated Commission Amount", TIP_COMMISSION), commission_val, bold=True)
+            )
+
+            secondary = (
+                f'<div style="display:flex;gap:2.5rem;padding:0 0.25rem 0.5rem;">'
+                + sec_items
+                + f'</div>'
+            )
 
         # Notes row
         notes_html = ""
         fn = (r["finance_notes"] or "").strip()
         pn = (r["partnership_notes"] or "").strip()
+        wn = (r["wl_invoicing_note"] or "").strip() if is_wl else ""
 
         note_parts = ""
+        if wn:
+            note_parts += (
+                f'<div style="flex:1;">'
+                f'<div style="font-size:0.68rem;font-weight:600;text-transform:uppercase;'
+                f'letter-spacing:0.06em;color:#94A3B8;margin-bottom:0.2rem;">WL Invoicing Note</div>'
+                f'<div style="font-size:0.8rem;color:#475569;">{wn}</div></div>'
+            )
         if fn:
             note_parts += (
                 f'<div style="flex:1;">'
