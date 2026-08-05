@@ -4,3 +4,4 @@ pandas>=2.0.0
 resend>=0.7.0
 itsdangerous>=2.1.0
 extra-streamlit-components>=0.1.60
+starlette<1.4.0
