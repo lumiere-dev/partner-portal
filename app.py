@@ -1784,14 +1784,26 @@ def show_referral_tracker():
     with st.spinner("Loading referral data..."):
         referrals = get_referrals_for_partner(st.session_state.partner_email)
 
+    has_wl = isinstance(referrals, list) and any(r["is_white_label"] for r in referrals)
+
     st.markdown("### Referral Tracker")
-    st.markdown("""
+    if has_wl:
+        intro_text = (
+            "For your white label students, this page lists out the invoice amounts and "
+            "their status. For any non white label students, it lists out the commission "
+            "details, tuition details, and payment status."
+        )
+    else:
+        intro_text = (
+            "Students for which your organisation will receive a referral payment, along with "
+            "their tuition details, commission rate, and payment status."
+        )
+    st.markdown(f"""
     <div style="background:#F8F9FA;border-left:4px solid #BE1E2D;border-radius:6px;
                 padding:0.85rem 1rem;margin-bottom:1.25rem;color:#475569;font-size:0.92rem;line-height:1.55;">
         <div style="font-size:0.75rem;font-weight:700;color:#94A3B8;text-transform:uppercase;
                     letter-spacing:0.06em;margin-bottom:0.35rem;">referral payment/commission</div>
-        Students for which your organisation will receive a referral payment, along with their
-        tuition details, commission rate, and payment status.
+        {intro_text}
     </div>
     """, unsafe_allow_html=True)
 
@@ -1824,18 +1836,21 @@ def show_referral_tracker():
             f'</div>'
         )
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown(_metric_card("Total Commission", _fmt_currency(total_commission), "#16A34A"), unsafe_allow_html=True)
-    with c2:
+    if has_wl:
         st.markdown(_metric_card("Commission Rate", commission_pct_display), unsafe_allow_html=True)
+    else:
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown(_metric_card("Total Commission", _fmt_currency(total_commission), "#16A34A"), unsafe_allow_html=True)
+        with c2:
+            st.markdown(_metric_card("Commission Rate", commission_pct_display), unsafe_allow_html=True)
 
     st.markdown("<div style='margin-top:1.5rem;'></div>", unsafe_allow_html=True)
 
     # ── How commissions are calculated ────────────────────────────────────────
     # White-label students are invoiced for program cost rather than earning
     # a referral commission, so this explainer doesn't apply to them.
-    if not any(r["is_white_label"] for r in referrals):
+    if not has_wl:
         st.markdown(
             f'<div style="background:white;border:1px solid #E2E8F0;border-radius:10px;'
             f'padding:1rem 1.25rem;margin-bottom:1.25rem;">'
@@ -1879,7 +1894,7 @@ def show_referral_tracker():
     # (on the Student table) instead of the referral's Payment Status field,
     # so the filter's options and matching need to account for both.
     status_options = ["Paid", "To be Paid", "Pending", "Not to be Paid"]
-    if any(r["is_white_label"] for r in referrals):
+    if has_wl:
         wl_status_options = [
             "Paid", "Partial", "To be Received", "Pending", "Refunded",
             "Partially Refunded", "Need to Adjust", "Not Required", "Refferral Payment",
