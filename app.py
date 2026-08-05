@@ -1833,22 +1833,25 @@ def show_referral_tracker():
     st.markdown("<div style='margin-top:1.5rem;'></div>", unsafe_allow_html=True)
 
     # ── How commissions are calculated ────────────────────────────────────────
-    st.markdown(
-        f'<div style="background:white;border:1px solid #E2E8F0;border-radius:10px;'
-        f'padding:1rem 1.25rem;margin-bottom:1.25rem;">'
-        f'<div style="font-size:0.88rem;font-weight:700;color:#1E293B;margin-bottom:0.5rem;">'
-        f'How commissions are calculated</div>'
-        f'<div style="font-size:0.83rem;color:#475569;line-height:1.7;margin-bottom:0.25rem;">'
-        f'<strong style="color:#1E293B;">Net Amount Received After Tax &amp; Transaction Fees</strong> — '
-        f'This is the amount after deducting a transaction fee of '
-        f'<strong style="color:#1E293B;">3.53% (Stripe)</strong> or <strong style="color:#1E293B;">4.41% (PayPal)</strong>, '
-        f'depending on the payment method, as well as a <strong style="color:#1E293B;">6.5% corporate tax</strong>.</div>'
-        f'<div style="font-size:0.83rem;color:#475569;line-height:1.7;">'
-        f'<strong style="color:#1E293B;">Calculated Commission</strong> — Net Amount Received After Tax &amp; Transaction Fees × your commission rate '
-        f'({commission_pct_display}). Commissions are paid once full tuition has been received and verified by our finance team.'
-        f'</div></div>',
-        unsafe_allow_html=True,
-    )
+    # White-label students are invoiced for program cost rather than earning
+    # a referral commission, so this explainer doesn't apply to them.
+    if not any(r["is_white_label"] for r in referrals):
+        st.markdown(
+            f'<div style="background:white;border:1px solid #E2E8F0;border-radius:10px;'
+            f'padding:1rem 1.25rem;margin-bottom:1.25rem;">'
+            f'<div style="font-size:0.88rem;font-weight:700;color:#1E293B;margin-bottom:0.5rem;">'
+            f'How commissions are calculated</div>'
+            f'<div style="font-size:0.83rem;color:#475569;line-height:1.7;margin-bottom:0.25rem;">'
+            f'<strong style="color:#1E293B;">Net Amount Received After Tax &amp; Transaction Fees</strong> — '
+            f'This is the amount after deducting a transaction fee of '
+            f'<strong style="color:#1E293B;">3.53% (Stripe)</strong> or <strong style="color:#1E293B;">4.41% (PayPal)</strong>, '
+            f'depending on the payment method, as well as a <strong style="color:#1E293B;">6.5% corporate tax</strong>.</div>'
+            f'<div style="font-size:0.83rem;color:#475569;line-height:1.7;">'
+            f'<strong style="color:#1E293B;">Calculated Commission</strong> — Net Amount Received After Tax &amp; Transaction Fees × your commission rate '
+            f'({commission_pct_display}). Commissions are paid once full tuition has been received and verified by our finance team.'
+            f'</div></div>',
+            unsafe_allow_html=True,
+        )
 
     # Tooltip CSS (injected once)
     st.markdown("""
