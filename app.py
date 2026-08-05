@@ -1872,6 +1872,22 @@ def show_referral_tracker():
     """, unsafe_allow_html=True)
 
     # ── Filters ───────────────────────────────────────────────────────────────
+    # White-label students track payment via FN: WL Invoice Payment Status
+    # (on the Student table) instead of the referral's Payment Status field,
+    # so the filter's options and matching need to account for both.
+    status_options = ["Paid", "To be Paid", "Pending", "Not to be Paid"]
+    if any(r["is_white_label"] for r in referrals):
+        wl_status_options = [
+            "Paid", "Partial", "To be Received", "Pending", "Refunded",
+            "Partially Refunded", "Need to Adjust", "Not Required", "Refferral Payment",
+        ]
+        for opt in wl_status_options:
+            if opt not in status_options:
+                status_options.append(opt)
+
+    def _row_status(r):
+        return (r["wl_invoice_payment_status"] if r["is_white_label"] else r["payment_status"]) or ""
+
     f1, f2, f3 = st.columns([2, 2, 1.5])
     with f1:
         names = sorted(set(r["name"] for r in referrals if r["name"]))
@@ -1882,7 +1898,7 @@ def show_referral_tracker():
     with f3:
         sel_status = st.selectbox(
             "Payment status",
-            ["All", "Paid", "To be Paid", "Pending", "Not to be Paid"],
+            ["All"] + status_options,
             key="ref_filter_status",
         )
 
@@ -1892,7 +1908,7 @@ def show_referral_tracker():
         and (sel_cohort == "All cohorts" or r["cohort"] == sel_cohort)
         and (
             sel_status == "All"
-            or r["payment_status"].strip().lower() == sel_status.lower()
+            or _row_status(r).strip().lower() == sel_status.lower()
         )
     ]
 
