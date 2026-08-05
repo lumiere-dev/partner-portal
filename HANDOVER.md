@@ -1,6 +1,6 @@
 # Partner Portal — Handover Document
 
-Last updated: 2026-08-03 (patch)
+Last updated: 2026-08-05 (patch)
 
 ## What this is
 
@@ -15,7 +15,7 @@ handed one of the sibling repos, expect very similar structure.
 
 ## Stack
 
-- **Streamlit** (single-file app, `app.py`, ~2,450 lines)
+- **Streamlit** (single-file app, `app.py`, ~2,590 lines)
 - **pyairtable** — reads/writes to Airtable (the system of record; this app is
   read-mostly)
 - **resend** — sends magic-link emails
@@ -125,6 +125,33 @@ Manager" card shown on the dashboard).
   Airtable's API/UI if referral data looks wrong.
 - Referral Tracker tab only appears if `partner_has_commission(email)` is
   true (commission rate lookup) — don't assume all partners have it.
+- **White-label (WL) referral handling** (`a57a86b`, `274e591`, `957478b`,
+  2026-08-05): WL students don't earn a referral commission — Lumiere
+  invoices the partner for program cost instead, tracked via
+  `WL_STUDENT_FIELD_IDS` (e.g. `FN: WL Invoice Payment Status`, `FN: WL
+  Program Cost`, `FN: WL Invoice Payment Date`) which live on the *Student*
+  table, not the Referral table, and get joined onto each referral by
+  `_attach_wl_fields()` (matches on `student_id`). `show_referral_tracker()`
+  computes `has_wl = any(r["is_white_label"] for r in referrals)` once at
+  the top and branches on it throughout:
+  - Card header shows `wl_invoice_payment_status` / `wl_program_cost` /
+    `wl_invoice_payment_date` instead of `payment_status` /
+    `commission_amount` / `payment_date` for WL rows.
+  - The Payment status filter checks `wl_invoice_payment_status` for WL
+    rows and `payment_status` for everyone else (previously always checked
+    `payment_status`, silently mis-filtering WL students — fixed in
+    `a57a86b`). When `has_wl`, the filter dropdown also unions in the WL
+    field's own Airtable choices (Paid, Partial, To be Received, Pending,
+    Refunded, Partially Refunded, Need to Adjust, Not Required, "Refferral
+    Payment" — that typo is in Airtable itself, not a bug here).
+  - When `has_wl`, the intro helper text is reworded to explain the
+    invoice-vs-commission split, the "Total Commission" metric card is
+    hidden (only "Commission Rate" shows), and the "How commissions are
+    calculated" explainer box is hidden entirely (`274e591`) — none of
+    that applies to WL invoicing.
+  - If a new WL-related Airtable field is added, add it to
+    `WL_STUDENT_FIELD_IDS` and thread it through `_build_referral` /
+    `_attach_wl_fields` the same way as the existing ones.
 - **Personalised application link banner** (`6c6b729`, 2026-07-15): shown at
   the top of the Onboarding and Program Tracker tabs via
   `render_application_link_banner()`. Looks up the partner's `Record ID
@@ -192,7 +219,7 @@ If you change anything about login timing/flow, check that a login event
 still fires exactly once per session (`login_tracked` session-state flag
 guards against double-firing) — this broke once already (`d2dfad2`, `691fa5a`).
 
-## Code map (`app.py`, single file, ~2,450 lines — line numbers approximate,
+## Code map (`app.py`, single file, ~2,590 lines — line numbers approximate,
 drift each time someone edits; re-grep `^def ` if precision matters)
 
 - **L1–68**: imports, `get_secret`, page config, Airtable base/table/field ID
@@ -226,7 +253,7 @@ bottom.
 
 ## Known rough edges / things to watch
 
-- Single-file architecture (2,450+ lines) — no tests. Changes should be
+- Single-file architecture (2,590+ lines) — no tests. Changes should be
   smoke-tested manually (`streamlit run`) since there's no CI/test suite to
   catch regressions.
 - Airtable field renames have broken this app multiple times (interview
