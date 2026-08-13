@@ -1995,6 +1995,21 @@ def _safe_float(val):
         return 0.0
 
 
+def _field_block(label, value, bold=False):
+    val_style = (
+        'font-size:0.95rem;font-weight:700;color:#1E293B;'
+        if bold else
+        'font-size:0.92rem;font-weight:500;color:#374151;'
+    )
+    return (
+        f'<div style="display:flex;flex-direction:column;gap:0.15rem;">'
+        f'<div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;'
+        f'letter-spacing:0.06em;color:#94A3B8;">{label}</div>'
+        f'<div style="{val_style}">{value}</div>'
+        f'</div>'
+    )
+
+
 def show_referral_tracker():
     with st.spinner("Loading referral data..."):
         referrals = get_referrals_for_partner(st.session_state.partner_email)
@@ -2184,20 +2199,6 @@ def show_referral_tracker():
             f'<i class="ref-icon">i</i>'
             f'<span class="ref-tip">{tip}</span>'
             f'</span>'
-        )
-
-    def _field_block(label, value, bold=False):
-        val_style = (
-            'font-size:0.95rem;font-weight:700;color:#1E293B;'
-            if bold else
-            'font-size:0.92rem;font-weight:500;color:#374151;'
-        )
-        return (
-            f'<div style="display:flex;flex-direction:column;gap:0.15rem;">'
-            f'<div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;'
-            f'letter-spacing:0.06em;color:#94A3B8;">{label}</div>'
-            f'<div style="{val_style}">{value}</div>'
-            f'</div>'
         )
 
     TIP_ORIG = "The full tuition amount before any scholarship or discount is applied."
