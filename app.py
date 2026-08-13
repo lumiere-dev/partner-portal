@@ -2367,9 +2367,11 @@ def show_student_profile(student):
 
     is_launched = str(student.get("confirmed_launched") or "").strip().lower() == "yes"
 
+    PUBLICATION_TAB_ENABLED = False  # Disabled 2026-08-13 pending debug of stale-cache lookup issue
+
     has_pub_marker = student.get("publication_marker", "").strip() == "Yes"
     has_pub_foundation = student.get("pub_foundation_student", "").strip().startswith("Yes")
-    show_publication_tab = has_pub_marker or has_pub_foundation
+    show_publication_tab = PUBLICATION_TAB_ENABLED and (has_pub_marker or has_pub_foundation)
 
     if is_launched:
         tab_labels = [
