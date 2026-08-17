@@ -342,25 +342,27 @@ def get_application_table():
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_student_publication_record(tracker_value):
     """Look up the student's record in the Publication base by matching the
-    'Student Cohort Application Tracker' field value."""
+    'Student Cohort Application Tracker' field value.
+
+    Raises on lookup/connection failure (e.g. missing PUBLICATION_BASE_ID /
+    PUBLICATION_TABLE secrets) instead of swallowing it, so a misconfiguration
+    surfaces as an error rather than silently looking like "no data yet" —
+    the exact failure mode that made this tab's data look broken for days."""
     if not tracker_value:
         return None
-    try:
-        table = get_application_table()
-        name = str(tracker_value).split("|")[0].strip().replace("'", "\\'")
-        records = table.all(
-            formula=f"FIND('{name}', {{Student Cohort Application Tracker}})",
-            fields=[
-                "Student Cohort Application Tracker",
-                "Publication Specialist (Text)",
-                "Publication Specialist Email",
-                "Publication Target (text)",
-                "PS: Latest Publication Outcome - (latest)",
-            ],
-        )
-        return records[0] if records else None
-    except Exception:
-        return None
+    table = get_application_table()
+    name = str(tracker_value).split("|")[0].strip().replace("'", "\\'")
+    records = table.all(
+        formula=f"FIND('{name}', {{Student Cohort Application Tracker}})",
+        fields=[
+            "Student Cohort Application Tracker",
+            "Publication Specialist (Text)",
+            "Publication Specialist Email",
+            "Publication Target (text)",
+            "PS: Latest Publication Outcome - (latest)",
+        ],
+    )
+    return records[0] if records else None
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -1782,7 +1784,11 @@ def show_publication_program(student):
     </div>
     """, unsafe_allow_html=True)
 
-    app_record = get_student_publication_record(student.get("name", ""))
+    try:
+        app_record = get_student_publication_record(student.get("name", ""))
+    except Exception as e:
+        st.error(f"Couldn't load publication data — check the PUBLICATION_BASE_ID / PUBLICATION_TABLE configuration. ({e})")
+        app_record = None
     app_fields = app_record["fields"] if app_record else {}
 
     specialist = app_fields.get("Publication Specialist (Text)") or "Not yet assigned"
