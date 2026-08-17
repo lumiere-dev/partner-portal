@@ -516,6 +516,7 @@ STUDENT_FIELDS = {
     "confirmed_launched":       "Student Confirmed & Launched",
     "partner_id":               "Partner Email ID (For Partner Portal Login)",
     "white_label":              "White Label or Partner Payment Program",
+    "wl_payment_collection":    "FN: WL Payment Collection for Program",
     "status_in_program":        "PM: Status in Program",
     "publication_marker":       "Publication Marker",
     "pub_foundation_student":   "Publication Foundation Student Y/N",
@@ -828,6 +829,7 @@ def _build_student(record):
         "interview_notes":           clean_field(f.get(STUDENT_FIELDS["interview_notes"], "")),
         "confirmed_launched":        clean_field(f.get(STUDENT_FIELDS["confirmed_launched"], "")),
         "white_label":               clean_field(f.get(STUDENT_FIELDS["white_label"], "")),
+        "wl_payment_collection":     clean_field(f.get(STUDENT_FIELDS["wl_payment_collection"], "")),
         "status_in_program":         clean_field(f.get(STUDENT_FIELDS["status_in_program"], "")),
         "publication_marker":        clean_field(f.get(STUDENT_FIELDS["publication_marker"], "")),
         "pub_foundation_student":    clean_field(f.get(STUDENT_FIELDS["pub_foundation_student"], "")),
@@ -1325,7 +1327,7 @@ def show_applicant_onboarding(student):
     mentor_confirmed = str(student.get("mentor_confirmation") or "").strip().lower() == "yes"
     mentor_prefix = "Mentor's" if mentor_confirmed else "Proposed mentor's"
 
-    is_white_label = bool((student.get("white_label") or "").strip())
+    wl_by_partner = _wl_payment_by_partner(student)
 
     discontinued_label = _discontinued_label(student)
     discontinued_detail = {
@@ -1348,13 +1350,13 @@ def show_applicant_onboarding(student):
     stages_done = [
         True,
         interview_val == "yes" or interview_not_required,
-        True if is_white_label else str(student.get("deposit_paid", "") or "").strip().lower() == "yes",
+        True if wl_by_partner else str(student.get("deposit_paid", "") or "").strip().lower() == "yes",
         str(student.get("mentor_confirmation", "") or "").strip().lower() == "yes",
-        True if is_white_label else str(student.get("full_tuition_paid", "") or "").strip().lower() == "yes",
+        True if wl_by_partner else str(student.get("full_tuition_paid", "") or "").strip().lower() == "yes",
     ]
     current_idx = next((i for i, done in enumerate(stages_done) if not done), len(stages_done))
 
-    if is_white_label:
+    if wl_by_partner:
         st.markdown(
             '<div style="background:#FEF9C3;border:1px solid #FDE047;border-radius:8px;'
             'padding:0.5rem 1rem;margin-bottom:0.75rem;font-size:0.85rem;color:#713F12;">'
@@ -1432,7 +1434,7 @@ def show_applicant_onboarding(student):
 
     # ── Stage 3: Deposit ──────────────────────────────────────────────────────
     invoice_date_val = format_date(student.get("deposit_invoice_date", ""))
-    if is_white_label:
+    if wl_by_partner:
         s3 = _pending("N/A — White Label student")
     elif stages_done[2]:
         s3 = _grid(
@@ -1487,7 +1489,7 @@ def show_applicant_onboarding(student):
 
     # ── Stage 5: Full Tuition ─────────────────────────────────────────────────
     tuition_badge_yes = '<span style="background:#DCFCE7;color:#166534;padding:0.15rem 0.65rem;border-radius:20px;font-size:0.85rem;font-weight:600;">Yes</span>'
-    if is_white_label:
+    if wl_by_partner:
         s5 = _pending("N/A — White Label student")
     elif is_launched:
         pm_ids = student.get("pm_ids", [])
@@ -2321,13 +2323,13 @@ def _cohort_sort_key(student):
 
 
 def _onboarding_stage_html(student, large=False):
-    is_wl = bool((student.get("white_label") or "").strip())
+    wl_by_partner = _wl_payment_by_partner(student)
     stages = [
         ("Applied",      True),
         ("Interview",    str(student.get("interview_invitation_sent", "") or "").strip().lower() in ("yes", "not required")),
-        ("Deposit",      True if is_wl else str(student.get("deposit_paid", "") or "").strip().lower() == "yes"),
+        ("Deposit",      True if wl_by_partner else str(student.get("deposit_paid", "") or "").strip().lower() == "yes"),
         ("Mentor Match", str(student.get("mentor_confirmation", "") or "").strip().lower() == "yes"),
-        ("Full Tuition", True if is_wl else str(student.get("full_tuition_paid", "") or "").strip().lower() == "yes"),
+        ("Full Tuition", True if wl_by_partner else str(student.get("full_tuition_paid", "") or "").strip().lower() == "yes"),
     ]
 
     current_idx = next((i for i, (_, done) in enumerate(stages) if not done), len(stages))
@@ -2404,6 +2406,19 @@ def _program_meetings_html(student):
         f'{completed} / {expected} meetings</div>'
         f'</div>'
     )
+
+
+def _wl_payment_by_partner(student):
+    """True if a white-label student's deposit/tuition is collected directly
+    from the partner rather than the student — in that case there's no
+    student-side payment to track, so those onboarding stages default to
+    complete. Defaults to False (pull the real deposit/tuition field values)
+    for non-WL students, WL students explicitly marked "Student & Parent
+    (directly, during the OB process)", and WL students where the field is
+    unset."""
+    if not (student.get("white_label") or "").strip():
+        return False
+    return (student.get("wl_payment_collection") or "").strip().lower() == "partner"
 
 
 def _discontinued_label(student):
