@@ -356,12 +356,6 @@ def get_student_publication_record(tracker_value):
                 "Publication Specialist Email",
                 "Publication Target (text)",
                 "PS: Latest Publication Outcome - (latest)",
-                "Target Submission Workshop",
-                "Target Intro Workshop",
-                "Target One-Pager",
-                "Checkpoint: Quiz 1 Status (Automated)",
-                "Checkpoint: Quiz 2 Status (Automated)",
-                "Checkpoint: Quiz 3 Status (Automated)",
             ],
         )
         return records[0] if records else None
@@ -1795,12 +1789,6 @@ def show_publication_program(student):
     specialist_email = app_fields.get("Publication Specialist Email") or ""
     target = app_fields.get("Publication Target (text)") or ""
     outcome = app_fields.get("PS: Latest Publication Outcome - (latest)") or student.get("publication_outcome", "")
-    submission_workshop = app_fields.get("Target Submission Workshop") or ""
-    intro_workshop = app_fields.get("Target Intro Workshop") or ""
-    one_pager = app_fields.get("Target One-Pager") or ""
-    quiz_1 = app_fields.get("Checkpoint: Quiz 1 Status (Automated)") or ""
-    quiz_2 = app_fields.get("Checkpoint: Quiz 2 Status (Automated)") or ""
-    quiz_3 = app_fields.get("Checkpoint: Quiz 3 Status (Automated)") or ""
 
     OUTCOME_MESSAGES = {
         "accepted": ("The student's paper has been accepted for publication — congratulations to them! The final published paper link should be shared with their publication specialist.", "#16A34A", "#F0FDF4"),
@@ -1864,91 +1852,6 @@ def show_publication_program(student):
             st.markdown(
                 f'<div class="info-card" style="height:100%;">{_field_block("Latest Publication Outcome", "")}'
                 f'<div style="font-size:0.88rem;color:#94A3B8;">No update yet — check back later.</div></div>',
-                unsafe_allow_html=True,
-            )
-
-    st.markdown("<div style='margin-top:0.75rem;'></div>", unsafe_allow_html=True)
-
-    # Workshop 1 — always visible
-    WORKSHOP_1_URL = "https://us06web.zoom.us/rec/play/qXshj04Q7Hh1vKfuDTZwaDsifq9bOFbO4Lc-77tdma-efk_rX-qCZKRRUtjF3q9035Qw1SnovXB4NQQ.8TVZpqemrV6JCA9X?accessLevel=meeting&canPlayFromShare=true&from=share_recording_detail&continueMode=true&oldStyle=true&componentName=rec-play&originRequestUrl=https%3A%2F%2Fus06web.zoom.us%2Frec%2Fshare%2FQA1v2WRNMV5MvCHEip3bsoAX9g-pQMoM6p83n8QqO3OwwcdtUhWy4O7oMgeD1z9u.0JEX0fwAC6j-tp3V"
-    st.markdown(
-        f'<div class="info-card" style="margin-bottom:1rem;">'
-        f'<div style="font-size:0.72rem;font-weight:600;color:#94A3B8;text-transform:uppercase;'
-        f'letter-spacing:0.05em;margin-bottom:0.3rem;">Introduction to Publication</div>'
-        f'<div style="font-size:0.8rem;color:#94A3B8;margin-bottom:0.65rem;">The first step in the student\'s publication '
-        f'journey — this workshop introduces the publication process and what to expect when submitting research.</div>'
-        f'<a href="{WORKSHOP_1_URL}" target="_blank" style="display:inline-flex;align-items:center;gap:0.4rem;'
-        f'background:#F8F9FA;border:1px solid #E2E8F0;border-radius:6px;padding:0.45rem 0.85rem;'
-        f'font-size:0.88rem;font-weight:600;color:#BE1E2D;text-decoration:none;">🔗 Publication Workshop 1 - Introduction to Publication</a>'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
-
-    # Target resources — only show if at least one target-specific resource is set
-    target_resource_links = [
-        ("Publication Workshop 2 - Introduction to Journal Target", intro_workshop),
-        ("Publication Workshop 3 - Journal Submission Prep", submission_workshop),
-        ("Target One-Pager", one_pager),
-    ]
-    target_available = [(label, url) for label, url in target_resource_links if url]
-    if target_available:
-        links_html = "".join([
-            f'<a href="{url}" target="_blank" '
-            f'style="display:inline-flex;align-items:center;gap:0.4rem;background:#F8F9FA;'
-            f'border:1px solid #E2E8F0;border-radius:6px;padding:0.45rem 0.85rem;'
-            f'font-size:0.88rem;font-weight:600;color:#BE1E2D;text-decoration:none;margin-right:0.5rem;margin-bottom:0.5rem;">🔗 {label}</a>'
-            for label, url in target_available
-        ])
-        st.markdown(
-            f'<div class="info-card" style="margin-bottom:1rem;"><div style="font-size:0.72rem;font-weight:600;'
-            f'color:#94A3B8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.3rem;">Target Resources</div>'
-            f'<div style="font-size:0.8rem;color:#94A3B8;margin-bottom:0.65rem;">Workshops and materials curated specifically '
-            f'for the student\'s target publication.</div><div style="display:flex;flex-wrap:wrap;">{links_html}</div></div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            '<div class="info-card" style="margin-bottom:1rem;"><div style="font-size:0.72rem;font-weight:600;'
-            'color:#94A3B8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.3rem;">Target Resources</div>'
-            '<div style="font-size:0.88rem;color:#94A3B8;line-height:1.55;">Target-specific resources will appear here '
-            'once the student finalizes their target journal.</div></div>',
-            unsafe_allow_html=True,
-        )
-
-    # Quiz checkpoints
-    quiz_chips = "".join([
-        f'<div style="display:flex;align-items:center;gap:0.5rem;background:{"#F0FDF4" if v else "#F8FAFC"};'
-        f'border:1px solid {"#86EFAC" if v else "#E2E8F0"};border-radius:8px;padding:0.5rem 0.85rem;">'
-        f'<div style="width:1.25rem;height:1.25rem;border-radius:50%;background:{"#16A34A" if v else "#CBD5E1"};'
-        f'color:white;font-size:0.75rem;font-weight:700;display:flex;align-items:center;justify-content:center;">{"✓" if v else "–"}</div>'
-        f'<div><div style="font-size:0.82rem;font-weight:600;color:#1A1A2E;">{label}</div>'
-        f'<div style="font-size:0.75rem;color:{"#16A34A" if v else "#94A3B8"};">{"Submitted" if v else "Not submitted"}</div></div>'
-        f'</div>'
-        for label, v in [("Quiz 1", quiz_1), ("Quiz 2", quiz_2), ("Quiz 3", quiz_3)]
-    ])
-    quizzes_incomplete = not (quiz_1 and quiz_2 and quiz_3)
-    if quizzes_incomplete:
-        col_quiz, col_bubble = st.columns([3, 2])
-    else:
-        col_quiz = st.columns(1)[0]
-        col_bubble = None
-    with col_quiz:
-        st.markdown(
-            f'<div class="info-card"><div style="font-size:0.72rem;font-weight:600;color:#94A3B8;'
-            f'text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.3rem;">Quiz Checkpoints</div>'
-            f'<div style="font-size:0.8rem;color:#94A3B8;margin-bottom:0.85rem;">Tracks the student\'s progress through '
-            f'the publication program quizzes.</div><div style="display:flex;gap:0.75rem;flex-wrap:wrap;">{quiz_chips}</div></div>',
-            unsafe_allow_html=True,
-        )
-    if col_bubble:
-        with col_bubble:
-            st.markdown(
-                '<div class="info-card" style="background:#FFF7ED;border:1px solid #FED7AA;height:100%;">'
-                '<div style="font-size:0.85rem;color:#92400E;margin-bottom:0.5rem;">The student hasn\'t completed all of '
-                'their quizzes yet. Here\'s the link they can use:</div>'
-                '<a href="https://airtable.com/shrgP2sLhOCV40Ok9" target="_blank" style="display:inline-flex;'
-                'align-items:center;gap:0.35rem;background:#BE1E2D;color:white;text-decoration:none;padding:0.4rem 0.85rem;'
-                'border-radius:6px;font-size:0.82rem;font-weight:600;white-space:nowrap;">Open the Quizzes →</a></div>',
                 unsafe_allow_html=True,
             )
 
@@ -2367,7 +2270,7 @@ def show_student_profile(student):
 
     is_launched = str(student.get("confirmed_launched") or "").strip().lower() == "yes"
 
-    PUBLICATION_TAB_ENABLED = False  # Disabled 2026-08-13 pending debug of stale-cache lookup issue
+    PUBLICATION_TAB_ENABLED = True
 
     has_pub_marker = student.get("publication_marker", "").strip() == "Yes"
     has_pub_foundation = student.get("pub_foundation_student", "").strip().startswith("Yes")
