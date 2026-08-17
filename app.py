@@ -2513,6 +2513,11 @@ def show_dashboard():
         st.markdown("---")
         if st.button("Refresh Data"):
             st.cache_data.clear()
+            get_airtable_api.clear()
+            get_tables.clear()
+            get_referral_table.clear()
+            get_application_table.clear()
+            get_partner_table.clear()
             st.session_state.students = get_students_for_partner(st.session_state.partner_email)
             st.session_state.selected_student = None
             st.rerun()
