@@ -504,14 +504,14 @@ STUDENT_FIELDS = {
     "interview_invitation_date":"Date of Interview Invite Sent [OB]",
     "deposit_paid":             "Deposit Paid [OB]",
     "deposit_invoice_sent":     "Invoice Sent for Deposit [OB]",
-    "deposit_invoice_date":     "OB: Date of deposit invoice sent",
-    "deposit_payment_date":     "OB: Date of deposit payment",
+    "deposit_invoice_date":     "Date of Deposit Invoice Sent [OB]",
+    "deposit_payment_date":     "Deposit Payment Date (date field) [OB]",
     "full_tuition_invoice_sent":"Full Tuition Invoice Sent",
     "full_tuition_paid":        "OB: Full Tuition Paid",
     "full_tuition_payment_date":"OB: Date of full tuition payment",
     "financial_aid":            "Financial Aid Allocation",
     "mentor_background_shared": "OB: Mentor Background Shared",
-    "mentor_outreach_date":     "OB: Mentor Outreach Date (date field)",
+    "mentor_outreach_date":     "Mentor Outreach Date (date field) [OB]",
     "interview_notes":          "Interview Notes For The Mentor [OB]",
     "confirmed_launched":       "Student Confirmed & Launched",
     "partner_id":               "Partner Email ID (For Partner Portal Login)",
@@ -531,7 +531,7 @@ STUDENT_FIELDS = {
     "program_manager_email":    "Program Manager Email",
     "revised_final_paper_due":  "PM: Student's Revised Final Paper - Due date",
     "revised_final_paper_upload": "Revised Final Paper upload (from Mentor-Student Progress Up Date)",
-    "submission_portal":        "Student Submission Portal Lookup",
+    "submission_portal":        "WL: Student Submission Portal Link (from Program Type [Link to Table])",
     "cohort_start_date":        "Cohort Start Date",
 }
 
@@ -2431,8 +2431,10 @@ def _discontinued_label(student):
         return "Application Rejected"
     if participation_decision == "no":
         return "Did Not Move Forward"
-    if status_in_program in ("Suspended", "Withdrawn"):
-        return status_in_program
+    if status_in_program == "Withdrawn":
+        return "Withdrawn"
+    if status_in_program.startswith("Suspended"):
+        return "Suspended"
     return None
 
 
