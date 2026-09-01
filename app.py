@@ -498,7 +498,7 @@ STUDENT_FIELDS = {
     "mentor_cv":                "Mentor CV",
     "mentor_confirmation":      "Mentor Confirmation",
     "mentor_university":        "University of PhD/Last Degree (text)",
-    "participation_decision":   "Written Confirmation/Participation Decision",
+    "participation_decision":   "Written Confirmation/Participation Decision [OB]",
     "final_decision":           "Final Application Decision - Lumiere Side [OB]",
     "interview_invitation_sent":"Interview Invitation Sent [OB]",
     "interview_invitation_date":"Date of Interview Invite Sent [OB]",
