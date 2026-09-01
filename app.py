@@ -517,7 +517,7 @@ STUDENT_FIELDS = {
     "partner_id":               "Partner Email ID (For Partner Portal Login)",
     "white_label":              "White Label or Partner Payment Program",
     "wl_payment_collection":    "FN: WL Payment Collection for Program",
-    "status_in_program":        "PM: Status in Program",
+    "status_in_program":        "PM: Student Status in Program",
     "publication_marker":       "Publication Marker",
     "pub_foundation_student":   "Publication Foundation Student Y/N",
     "publication_outcome":      "PS: Latest Publication Outcome - Latest",
