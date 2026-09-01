@@ -2653,7 +2653,7 @@ def show_dashboard():
         </div>
         """, unsafe_allow_html=True)
         render_application_link_banner(st.session_state.partner_email)
-        ob_col_search, ob_col_cohort, ob_col_upcoming = st.columns([2, 2, 2])
+        ob_col_search, ob_col_cohort, ob_col_upcoming, ob_col_hide = st.columns([2, 2, 1.5, 1.5])
         with ob_col_search:
             ob_names = sorted(set(s["name"].split("|")[0].strip() for s in onboarding))
             selected_ob = st.selectbox(
@@ -2669,11 +2669,15 @@ def show_dashboard():
         with ob_col_upcoming:
             st.markdown("<div style='padding-top:28px'></div>", unsafe_allow_html=True)
             only_upcoming = st.checkbox("Upcoming cohort only", key="filter_ob_upcoming")
+        with ob_col_hide:
+            st.markdown("<div style='padding-top:28px'></div>", unsafe_allow_html=True)
+            hide_discontinued_ob = st.checkbox("Hide discontinued students", key="filter_ob_hide_discontinued")
         filtered_onboarding = [
             s for s in onboarding
             if (selected_ob == "All students" or s["name"].split("|")[0].strip() == selected_ob)
             and (selected_ob_cohort == "All cohorts" or s.get("cohort", "") == selected_ob_cohort)
             and (not only_upcoming or _is_upcoming_cohort(s.get("upcoming_cohort")))
+            and (not hide_discontinued_ob or not _discontinued_label(s))
         ]
         render_student_list(filtered_onboarding, "Onboarding Tracker", show_pipeline=True)
     elif "Program" in view:
@@ -2688,7 +2692,7 @@ def show_dashboard():
         </div>
         """, unsafe_allow_html=True)
         render_application_link_banner(st.session_state.partner_email)
-        prog_col_search, prog_col_cohort, prog_col_status = st.columns([2, 2, 2])
+        prog_col_search, prog_col_cohort, prog_col_status, prog_col_hide = st.columns([2, 2, 1.5, 1.5])
         with prog_col_search:
             prog_names = sorted(set(s["name"].split("|")[0].strip() for s in in_program))
             selected_prog = st.selectbox(
@@ -2706,6 +2710,9 @@ def show_dashboard():
                 "Program completion", options=["All", "Complete", "In progress"],
                 key="filter_prog_status",
             )
+        with prog_col_hide:
+            st.markdown("<div style='padding-top:28px'></div>", unsafe_allow_html=True)
+            hide_discontinued_prog = st.checkbox("Hide discontinued students", key="filter_prog_hide_discontinued")
         filtered_program = [
             s for s in in_program
             if (selected_prog == "All students" or s["name"].split("|")[0].strip() == selected_prog)
@@ -2715,6 +2722,7 @@ def show_dashboard():
                 or (selected_prog_status == "Complete" and s.get("program_complete"))
                 or (selected_prog_status == "In progress" and not s.get("program_complete"))
             )
+            and (not hide_discontinued_prog or not _discontinued_label(s))
         ]
         render_student_list(filtered_program, "Program Tracker", show_meetings=True)
 
