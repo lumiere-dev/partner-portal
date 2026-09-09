@@ -113,6 +113,27 @@ def get_bd_poc_table():
     return get_airtable_api().base(BASE_ID).table("tbl22BErOHo0FLcgJ")
 
 
+def _partner_email_formula(email):
+    """FIND() is a cheap server-side pre-filter for records that could
+    contain this address among a comma-separated Partner Portal Log-In
+    Email list; _select_partner_record verifies the exact match."""
+    safe = email.strip().lower().replace("'", "\\'")
+    return f"FIND('{safe}', LOWER({{Partner Portal Log-In Email}})) > 0"
+
+
+def _select_partner_record(records, email):
+    """Pick the record whose Partner Portal Log-In Email contains this
+    address as one of its comma-separated values. Some partners have more
+    than one login email on file; a plain substring check on its own would
+    risk false positives like 'x@y.com' matching inside 'notx@y.com', so
+    each candidate is compared as a whole address, not a substring."""
+    email = email.strip().lower()
+    for r in records:
+        field_value = r["fields"].get("Partner Portal Log-In Email", "")
+        parts = [p.strip().lower() for p in str(field_value).split(",")]
+        if email in parts:
+            return r
+    return None
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -126,38 +147,35 @@ def get_staff_name(record_id):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _partner_exists(email):
-    safe = email.strip().lower().replace("'", "\\'")
     def _call():
         return get_partner_table().all(
-            formula=f"LOWER({{Partner Portal Log-In Email}}) = '{safe}'",
+            formula=_partner_email_formula(email),
             fields=["Partner Portal Log-In Email"],
-            max_records=1,
         )
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     try:
         records = executor.submit(_call).result(timeout=20)
     finally:
         executor.shutdown(wait=False)
-    return bool(records)
+    return _select_partner_record(records, email) is not None
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_partner_name(email):
     try:
-        safe = email.strip().lower().replace("'", "\\'")
         def _call():
             return get_partner_table().all(
-                formula=f"LOWER({{Partner Portal Log-In Email}}) = '{safe}'",
-                fields=["Partner Name"],
-                max_records=1,
+                formula=_partner_email_formula(email),
+                fields=["Partner Name", "Partner Portal Log-In Email"],
             )
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         try:
             records = executor.submit(_call).result(timeout=20)
         finally:
             executor.shutdown(wait=False)
-        if records:
-            return records[0]["fields"].get("Partner Name", "")
+        record = _select_partner_record(records, email)
+        if record:
+            return record["fields"].get("Partner Name", "")
     except Exception:
         pass
     return ""
@@ -173,14 +191,13 @@ def _unwrap_str(val):
 def get_partner_info(email):
     _empty = {"bd_poc_name": "", "bd_poc_headshot_url": "", "bd_poc_calendly": "", "bd_poc_bio": "", "bd_poc_email": ""}
     try:
-        safe = email.strip().lower().replace("'", "\\'")
         partner_records = get_partner_table().all(
-            formula=f"LOWER({{Partner Portal Log-In Email}}) = '{safe}'",
-            max_records=1,
+            formula=_partner_email_formula(email),
         )
-        if not partner_records:
+        partner_record = _select_partner_record(partner_records, email)
+        if not partner_record:
             return _empty
-        partner_record_id = partner_records[0]["id"]
+        partner_record_id = partner_record["id"]
 
         bd_table = get_airtable_api().base(BD_LOOKUP_BASE_ID).table(BD_LOOKUP_TABLE_ID)
         lookup_records = bd_table.all(
@@ -228,14 +245,13 @@ def get_partner_info(email):
 def get_bd_poc_details(email):
     _empty = {"bd_poc_name": "", "bd_poc_headshot_url": "", "bd_poc_calendly": "", "bd_poc_bio": "", "bd_poc_email": ""}
     try:
-        safe = email.strip().lower().replace("'", "\\'")
         partner_records = get_partner_table().all(
-            formula=f"LOWER({{Partner Portal Log-In Email}}) = '{safe}'",
-            max_records=1,
+            formula=_partner_email_formula(email),
         )
-        if not partner_records:
+        partner_record = _select_partner_record(partner_records, email)
+        if not partner_record:
             return _empty
-        source_record_id = _unwrap_str(partner_records[0]["fields"].get("Record ID (from source base)", ""))
+        source_record_id = _unwrap_str(partner_record["fields"].get("Record ID (from source base)", ""))
         if not source_record_id:
             return _empty
 
@@ -290,15 +306,14 @@ def get_bd_poc_details(email):
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_partner_application_link(email):
     try:
-        safe = email.strip().lower().replace("'", "\\'")
         partner_records = get_partner_table().all(
-            formula=f"LOWER({{Partner Portal Log-In Email}}) = '{safe}'",
-            fields=["Record ID (from source base)"],
-            max_records=1,
+            formula=_partner_email_formula(email),
+            fields=["Record ID (from source base)", "Partner Portal Log-In Email"],
         )
-        if not partner_records:
+        partner_record = _select_partner_record(partner_records, email)
+        if not partner_record:
             return ""
-        source_record_id = _unwrap_str(partner_records[0]["fields"].get("Record ID (from source base)", ""))
+        source_record_id = _unwrap_str(partner_record["fields"].get("Record ID (from source base)", ""))
         if not source_record_id:
             return ""
 
@@ -368,14 +383,13 @@ def get_student_publication_record(tracker_value):
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_partner_record_id(email):
     try:
-        safe = email.strip().lower().replace("'", "\\'")
         records = get_partner_table().all(
-            formula=f"LOWER({{Partner Portal Log-In Email}}) = '{safe}'",
+            formula=_partner_email_formula(email),
             fields=["Partner Portal Log-In Email"],
-            max_records=1,
         )
-        if records:
-            return records[0]["id"]
+        record = _select_partner_record(records, email)
+        if record:
+            return record["id"]
     except Exception:
         pass
     return None
@@ -385,14 +399,13 @@ def get_partner_record_id(email):
 def partner_has_commission(email):
     """Returns True if the partner has a non-zero Commission Given (%) value."""
     try:
-        safe = email.strip().lower().replace("'", "\\'")
         records = get_partner_table().all(
-            formula=f"LOWER({{Partner Portal Log-In Email}}) = '{safe}'",
-            max_records=1,
+            formula=_partner_email_formula(email),
         )
-        if not records:
+        record = _select_partner_record(records, email)
+        if not record:
             return False
-        val = records[0]["fields"].get("Commission Given (%)")
+        val = record["fields"].get("Commission Given (%)")
         if isinstance(val, list):
             val = val[0] if val else None
         if val is None or val == "":
