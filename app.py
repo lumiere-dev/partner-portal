@@ -375,6 +375,7 @@ def get_student_publication_record(tracker_value):
             "Publication Specialist Email",
             "Publication Target (text)",
             "PS: Latest Publication Outcome - (latest)",
+            "Link to Publication (from Publication Updates)",
         ],
     )
     return records[0] if records else None
@@ -1810,9 +1811,15 @@ def show_publication_program(student):
     specialist_email = app_fields.get("Publication Specialist Email") or ""
     target = app_fields.get("Publication Target (text)") or ""
     outcome = app_fields.get("PS: Latest Publication Outcome - (latest)") or student.get("publication_outcome", "")
+    # Lookup field — returns a list of URLs, one per linked Publication Update
+    pub_links_raw = app_fields.get("Link to Publication (from Publication Updates)") or []
+    if not isinstance(pub_links_raw, list):
+        pub_links_raw = [pub_links_raw]
+    # Updates without a link come back as None entries — drop them
+    pub_links = list(dict.fromkeys(str(u).strip() for u in pub_links_raw if u and str(u).strip()))
 
     OUTCOME_MESSAGES = {
-        "accepted": ("The student's paper has been accepted for publication — congratulations to them! The final published paper link should be shared with their publication specialist.", "#16A34A", "#F0FDF4"),
+        "accepted": ("The student's paper has been accepted for publication — congratulations to them!", "#16A34A", "#F0FDF4"),
         "did not submit rfp": ("The student's final paper has not been submitted yet. Their publication specialist will guide them through submission to their target journal once the final paper is complete.", "#64748B", "#F8FAFC"),
         "rejected": ("The student's paper was not accepted to their first choice of journal. Their publication specialist can help plan the next submission.", "#D97706", "#FFFBEB"),
         "resubmitted": ("The student has resubmitted their revised paper to their target journal and is now waiting on the journal's final decision.", "#2563EB", "#EFF6FF"),
@@ -1859,6 +1866,12 @@ def show_publication_program(student):
                 unsafe_allow_html=True,
             )
 
+    pub_link_html = "".join(
+        f'<div style="margin-top:0.6rem;"><a href="{url}" target="_blank" '
+        f'style="font-size:0.88rem;font-weight:600;color:#BE1E2D;text-decoration:none;">View publication ↗</a></div>'
+        for url in pub_links
+    )
+
     with col_b:
         if outcome_message:
             st.markdown(
@@ -1866,7 +1879,13 @@ def show_publication_program(student):
                 f'<div style="font-size:0.72rem;font-weight:600;color:#94A3B8;text-transform:uppercase;'
                 f'letter-spacing:0.05em;margin-bottom:0.4rem;">Latest Publication Outcome</div>'
                 f'<div style="font-size:0.88rem;color:#1A1A2E;line-height:1.55;">{outcome_message}</div>'
-                f'</div>',
+                f'{pub_link_html}</div>',
+                unsafe_allow_html=True,
+            )
+        elif pub_links:
+            st.markdown(
+                f'<div class="info-card" style="height:100%;">{_field_block("Latest Publication Outcome", "")}'
+                f'{pub_link_html}</div>',
                 unsafe_allow_html=True,
             )
         else:
